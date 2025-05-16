@@ -1,0 +1,307 @@
+下面我将严格按照你提供的 **class08.Code02\_Trie**（哈希表实现版）来分九步深入解析。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**：同样是维护一组字符串，支持：
+
+  1. `insert(word)`：插入单词；
+  2. `erase(word)`：删除已插入的单词一次；
+  3. `countWordsEqualTo(word)`：查询完全相同的单词数；
+  4. `countWordsStartingWith(pre)`：查询以某前缀开头的单词数。
+* **优秀之处**：
+
+  * 时间复杂度均为 O(L)，L = 单词长度；
+  * 使用 **动态哈希表** 存分支，比固定数组更灵活，可支持任意字符集（如 Unicode）。
+* **核心思想**：
+
+  1. 每个节点记录 `pass`（经过次数）与 `end`（结束次数）；
+  2. 用 `HashMap<Integer,Node>` 动态维护子分支，键是字符的整数码；
+  3. 插入/删除/查询均沿字符路径递归，借助 `pass`/`end` 快速统计。
+* **空间复杂度**：O(ΣL)，ΣL 为所有单词长度之和，且哈希表方案在稀疏分支时节省空间。
+
+---
+
+## 2. 数据结构及代码解析
+
+```java
+class Node {
+    public int pass;                       // 多少单词经过此节点
+    public int end;                        // 多少单词在此节点结束
+    public HashMap<Integer, Node> nexts;   // 动态分支：键=字符码，值=子节点
+    public Node() {
+        pass = 0;
+        end  = 0;
+        nexts = new HashMap<>();
+    }
+}
+private Node root;  // 根节点，不对应任何字符
+```
+
+* **用法理由**：
+
+  * `pass`/`end` 用于前缀与精确匹配的快速统计；
+  * `HashMap` 使得节点分支仅在实际字符出现时才创建，支持字符范围无限扩展。
+
+---
+
+## 3. 核心步骤代码解析
+
+### 插入 `insert(String word)`
+
+```java
+if (word == null) return;
+Node node = root;
+node.pass++;  // 根节点计数
+for (char c : word.toCharArray()) {
+    int idx = (int) c;  // 用字符码做键
+    if (!node.nexts.containsKey(idx)) {
+        node.nexts.put(idx, new Node());
+    }
+    node = node.nexts.get(idx);
+    node.pass++;  // 子节点计数
+}
+node.end++;  // 末端节点计数
+```
+
+* **思想**：沿字符路径，若无对应子节点则新建，更新每个节点 `pass`，最后 `end++`。
+
+### 删除 `erase(String word)`
+
+```java
+if (countWordsEqualTo(word) == 0) return;
+Node node = root;
+node.pass--;  // 根节点计数--
+for (char c : word.toCharArray()) {
+    int idx = (int) c;
+    Node next = node.nexts.get(idx);
+    if (--next.pass == 0) {
+        node.nexts.remove(idx);  // 剪枝：若该路径无剩余单词，删除子节点
+        return;
+    }
+    node = next;
+}
+node.end--;  // 末端计数--
+```
+
+* **技巧**：删除时“懒剪枝”：一旦某子节点 `pass` 减为 0，直接 `remove`，并提前返回，无需再遍历更深。
+
+### 完全匹配查询 `countWordsEqualTo(String word)`
+
+```java
+if (word == null) return 0;
+Node node = root;
+for (char c : word.toCharArray()) {
+    int idx = (int) c;
+    if (!node.nexts.containsKey(idx)) return 0;
+    node = node.nexts.get(idx);
+}
+return node.end;
+```
+
+### 前缀匹配查询 `countWordsStartingWith(String pre)`
+
+```java
+if (pre == null) return 0;
+Node node = root;
+for (char c : pre.toCharArray()) {
+    int idx = (int) c;
+    if (!node.nexts.containsKey(idx)) return 0;
+    node = node.nexts.get(idx);
+}
+return node.pass;
+```
+
+---
+
+## 4. 设计或逻辑技巧
+
+1. **动态分支**：用 `HashMap` 仅为真的路径分配空间，比定长数组更省。
+2. **键用字符码**：直接 `(int)c`，无需 `ch - 'a'`，支持任意字符。
+3. **懒剪枝**：`erase` 中遇 `pass==0` 即 `remove`，快速清理无用节点。
+4. **提前返回**：在删除剪枝后 `return`，减少不必要的迭代。
+
+---
+
+## 5. 全代码及详尽注释
+
+```java
+package class08;
+
+import java.util.HashMap;
+
+public class Code02_Trie {
+
+    // LeetCode 测试链接：https://leetcode.cn/problems/implement-trie-ii-prefix-tree/
+    class Trie {
+
+        // 前缀树节点定义
+        class Node {
+            public int pass;                   // 经过此节点的单词数量
+            public int end;                    // 在此节点结束的单词数量
+            public HashMap<Integer, Node> nexts;// 子分支：键=字符码，值=子节点
+            public Node() {
+                pass = 0;
+                end  = 0;
+                nexts = new HashMap<>();
+            }
+        }
+
+        private Node root;  // 树根
+
+        // 构造器：初始化根节点
+        public Trie() {
+            root = new Node();
+        }
+
+        // 插入单词
+        public void insert(String word) {
+            if (word == null) return;
+            char[] chs = word.toCharArray();
+            Node node = root;
+            node.pass++;  // 根节点经过计数
+            for (int i = 0; i < chs.length; i++) {
+                int idx = (int) chs[i];  // 字符码作为键
+                if (!node.nexts.containsKey(idx)) {
+                    node.nexts.put(idx, new Node());
+                }
+                node = node.nexts.get(idx);
+                node.pass++; // 子节点经过计数
+            }
+            node.end++;    // 单词末端计数
+        }
+
+        // 删除单词一次
+        public void erase(String word) {
+            if (countWordsEqualTo(word) == 0) {
+                return;   // 单词不存在，不用删
+            }
+            char[] chs = word.toCharArray();
+            Node node = root;
+            node.pass--;  // 根节点计数--
+            for (int i = 0; i < chs.length; i++) {
+                int idx = (int) chs[i];
+                Node next = node.nexts.get(idx);
+                if (--next.pass == 0) {
+                    // 若该子路径无单词经过，则从哈希表移除，剪掉子树
+                    node.nexts.remove(idx);
+                    return;
+                }
+                node = next;
+            }
+            node.end--;   // 末端计数--
+        }
+
+        // 查询与 word 完全相同的单词数
+        public int countWordsEqualTo(String word) {
+            if (word == null) return 0;
+            char[] chs = word.toCharArray();
+            Node node = root;
+            for (int i = 0; i < chs.length; i++) {
+                int idx = (int) chs[i];
+                if (!node.nexts.containsKey(idx)) {
+                    return 0;  // 路径断开，返回 0
+                }
+                node = node.nexts.get(idx);
+            }
+            return node.end;
+        }
+
+        // 查询以 pre 为前缀的单词数
+        public int countWordsStartingWith(String pre) {
+            if (pre == null) return 0;
+            char[] chs = pre.toCharArray();
+            Node node = root;
+            for (int i = 0; i < chs.length; i++) {
+                int idx = (int) chs[i];
+                if (!node.nexts.containsKey(idx)) {
+                    return 0;
+                }
+                node = node.nexts.get(idx);
+            }
+            return node.pass;
+        }
+    }
+
+}
+```
+
+---
+
+## 6. 易懂示例演示
+
+```java
+Trie trie = new Trie();
+trie.insert("你好");         // 中文也支持
+trie.insert("你好");
+trie.insert("世界");
+System.out.println(trie.countWordsEqualTo("你好"));       // 2
+System.out.println(trie.countWordsStartingWith("你"));   // 2
+trie.erase("你好");
+System.out.println(trie.countWordsEqualTo("你好"));       // 1
+System.out.println(trie.countWordsStartingWith("你"));   // 1
+trie.insert("hi");
+System.out.println(trie.countWordsStartingWith("h"));    // 1
+```
+
+* **解析**：
+
+  * 插入两次 “你好” → `end("你好")=2`，前缀 “你” 的 `pass=2`；
+  * 删除一次后各减 1；
+  * 演示了多语言（任意字符）支持。
+
+---
+
+## 7. 可解的经典题目
+
+* **LeetCode 208/II**：实现 Trie；
+* **LeetCode 212**：单词搜索 II（Trie 剪枝）；
+* **LeetCode 820**：单词拆分（快速前缀判断）；
+* **LeetCode 676**：实现包含通配符的字典；
+* **多语言词典**：如中英混合检索。
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **节点双计数**
+
+   * `pass`：前缀经过次数 → 前缀查询；
+   * `end`：单词结束次数 → 精确查询。
+2. **动态分支**
+
+   ```
+   nexts: HashMap<字符码,Node>
+   索引 = (int) ch
+   ```
+3. **操作套路**
+
+   ```
+   insert:
+     root.pass++
+     for c in word:
+       if no branch, new Node
+       node = child; node.pass++
+     node.end++
+   erase:
+     if countEqual==0 return
+     root.pass--
+     for c in word:
+       next.pass--
+       if next.pass==0: remove branch; return
+       node=next
+     node.end--
+   queryEqual:
+     traverse→return end
+   queryPre:
+     traverse→return pass
+   ```
+4. **懒剪枝**：`erase` 中一旦 `pass` 归零，`remove` 并 `return`，剪掉无用子树。
+5. **时间 O(L)**，空间按实际分支动态分配。
+
+---
+
+## 9. 严格按照原代码实现
+
+以上全部解析、示例和记忆方法，均基于你给出的 `class08.Code02_Trie`（哈希表版）原始实现，未引入任何变体。如需更深层次探讨或针对某行代码细节，请告诉我！
