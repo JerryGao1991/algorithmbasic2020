@@ -1,0 +1,209 @@
+下面我将围绕你给出的 **Manacher 算法** Java 实现，严格按照你的代码，分九个部分深入讲解，帮助你全面理解、记忆和运用。
+
+---
+
+## 1. 算法介绍
+
+* **解决问题**：在线性时间内，求一个字符串的最长回文子串长度（中心扩展法最坏 O(N²)，Manacher 达到 O(N)）。
+* **优秀之处**：将原串和虚拟字符“#”结合，统一处理奇偶回文；利用已知回文半径信息，避免重复比较，实现每个位置平均只扩展一次。
+* **核心思想**：
+
+  1. **预处理**：在字符间插入‘#’，使所有回文半径都是奇数长度；
+  2. **镜像利用**：当前考察下标 `i`，设已知最右回文边界 R 对应中心 C，则若 `i < R`，则 `i` 的初始回文半径可取 `min(pArr[mirror], R-i)`；
+  3. **中心扩展**：在此基础上继续向两侧扩；
+  4. **更新中心与边界**：若扩出新的更右边界，则更新 `C=i, R=i+pArr[i]`。
+* **时间复杂度**：O(N)，其中 N≈2\*|s|+1，常数因子低。
+
+---
+
+## 2. 用到的数据结构及代码解析
+
+```java
+char[] str = manacherString(s);
+int[] pArr = new int[str.length];
+int C = -1, R = -1, max = Integer.MIN_VALUE;
+```
+
+* **char\[] str**：存放插入“#”后的新字符串（长度 2n+1），便于统一扩展。
+* **int\[] pArr**：记录每个中心 i 的回文“半径”（包括中心自身），即最大匹配长度。
+* **C, R**：当前已知的最优回文中心及其右边界（`R` 是边界的下一个位置）。
+* **max**：最终的最大半径，用于计算回文长度。
+
+---
+
+## 3. 核心步骤代码解析
+
+```java
+for (int i = 0; i < str.length; i++) {
+    pArr[i] = R > i ? Math.min(pArr[2*C - i], R - i) : 1;
+    while (i + pArr[i] < str.length && i - pArr[i] > -1 
+           && str[i + pArr[i]] == str[i - pArr[i]]) {
+        pArr[i]++;
+    }
+    if (i + pArr[i] > R) {
+        R = i + pArr[i];
+        C = i;
+    }
+    max = Math.max(max, pArr[i]);
+}
+return max - 1;
+```
+
+1. **初始化半径**
+
+   * 若 `i<R`：利用“镜像点” `2*C-i` 的半径 `pArr[mirror]`；旁界限为 `R-i`，取二者小者。
+   * 若 `i>=R`：半径至少为 1（即只含自身）。
+2. **中心扩展**
+
+   * 对称位置字符相等则 `pArr[i]++`，持续扩展直到越界或不等。
+3. **更新 C、R**
+
+   * 若新的回文右边界 `i+pArr[i]` 超过旧的 `R`，则更新为更优中心。
+4. **记录最大值**
+
+   * `max` 始终保存最大的 `pArr[i]`，最终返回 `max-1`（扣除插入的“#”）。
+
+---
+
+## 4. 设计与技巧
+
+* **统一字符处理**：`manacherString` 插入 `#`，免去奇偶分支。
+* **镜像复用**：`pArr[2*C - i]` 避免对称区间重复扩展，大幅削减比较次数。
+* **边界 R 定义为“下一个位置”**：扩展判定 `i < R` 更易理解 `R-i` 即可用长度。
+* **`max-1` 换算**：整合半径到原串长度，无需再次计算。
+
+---
+
+## 5. 全代码及详尽注释
+
+```java
+package class28;
+
+public class Code01_Manacher {
+
+    // 主方法：返回 s 的最长回文子串长度
+    public static int manacher(String s) {
+        if (s == null || s.length() == 0) {
+            return 0;
+        }
+        // 1. 预处理：在字符间插入 '#'
+        char[] str = manacherString(s);
+        // 2. 半径数组，记录每个位置的最长回文半径
+        int[] pArr = new int[str.length];
+        // 已知最优中心 C 和最右边界 R（R 为边界的“下一个位置”）
+        int C = -1, R = -1;
+        // 最长回文半径
+        int max = Integer.MIN_VALUE;
+
+        // 3. 遍历每个位置 i，计算 pArr[i]
+        for (int i = 0; i < str.length; i++) {
+            // 3.1 初始化：若 i 在 R 内，可先用镜像点最小值，否则为 1
+            pArr[i] = R > i
+                      ? Math.min(pArr[2 * C - i], R - i)
+                      : 1;
+            // 3.2 向两侧扩展
+            while (i + pArr[i] < str.length && i - pArr[i] > -1
+                   && str[i + pArr[i]] == str[i - pArr[i]]) {
+                pArr[i]++;
+            }
+            // 3.3 更新最右边界 R 和中心 C
+            if (i + pArr[i] > R) {
+                R = i + pArr[i];
+                C = i;
+            }
+            // 3.4 更新全局最大半径
+            max = Math.max(max, pArr[i]);
+        }
+        // 4. 返回原串长度：半径-1（扣除插入字符）
+        return max - 1;
+    }
+
+    // 将原串转为带 '#' 串，长度 = 2*n+1
+    public static char[] manacherString(String str) {
+        char[] charArr = str.toCharArray();
+        char[] res = new char[str.length() * 2 + 1];
+        int index = 0;
+        for (int i = 0; i != res.length; i++) {
+            if ((i & 1) == 0) {
+                res[i] = '#';       // 偶数位放 #
+            } else {
+                res[i] = charArr[index++]; // 奇数位放原串字符
+            }
+        }
+        return res;
+    }
+
+    // 暴力验证：中心扩展所有位置，返回最长回文长度
+    public static int right(String s) { … }
+
+    // 随机生成字符串，用于测试
+    public static String getRandomString(int possibilities, int size) { … }
+
+    // 验证主方法正确性
+    public static void main(String[] args) { … }
+
+}
+```
+
+---
+
+## 6. “手把手”例子
+
+假设 `s = "abaac"`：
+
+1. 预处理后 `str = ['#','a','#','b','#','a','#','a','#','c','#']`。
+2. 图示回文半径 pArr（示例）：
+
+| i    | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+| ---- | - | - | - | - | - | - | - | - | - | - | -- |
+| ch   | # | a | # | b | # | a | # | a | # | c | #  |
+| pArr | 1 | 2 | 1 | 2 | 1 | 4 | 1 | 2 | 1 | 2 | 1  |
+
+* 在 `i=5`（即中间 `#` 位置，实际对应字符第 2 个 `a`）扩到半径 4，对应回文串 `aabaa`，长度 `4-1=3` 在原串中即 “aba”。
+
+3. 最终 `max=4`，返回 `3`。
+
+---
+
+## 7. 可解的经典题目
+
+* **最长回文子串**（LeetCode 5）
+* **字符串回文判断及动态维护**
+* **求某区间内回文串数目**（拓展：Manacher +差分）
+* **最长回文子序列**（需改造）
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **“#”统一法**：统一奇偶回文 ⇒ 在脑中默唤 “hash-all”。
+2. **“镜像与边界”口诀**：
+
+   ```
+   i<R先镜像，镜像半径别越界；
+   否则从一开始，遇异即停下。
+   ```
+3. **核心变量**：
+
+   * C：中心（Center）
+   * R：右边界下一个（Right next）
+   * pArr：半径数组
+4. **流程记忆图**：
+
+   ```
+      ┌──> 初始化 pArr[i]
+      │
+      │   i<R?——是——> min(镜像, R-i)
+      │   │
+      │   否——> 1
+      │
+      ├─向两侧扩─> 扩失败
+      │
+      └─更新 C,R, max
+   ```
+5. **时间复杂度 O(N)**：
+
+   * 利用已知扩展边界减少重复检查
+   * 每个字符“贡献”常数次比较
+
+以上九步，完整覆盖 Manacher 算法的原理、代码结构、核心技巧、示例及记忆方法。如有任何细节想再深入或配合更多例题，欢迎继续交流！
