@@ -1,0 +1,269 @@
+下面我将严格按照你给出的 **class08.Code04\_RadixSort** 代码，从九个方面详尽解析，帮助你彻底理解基数排序（LSD 版本）的本质、技巧与记忆方法。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  对一组非负整数进行排序，避免比较，利用数字的十进制位进行分配排序（bucket sort 的一种特例）。
+* **优秀之处**
+
+  * **非比较**：不受比较排序 Ω(N log N) 下界的限制；
+  * **线性级别**：时间复杂度 O((N + B)·D)，其中 N = 数组长度，B=桶数（本例 B=10），D=最大数字位数；
+  * **稳定**：同一位相同数字的元素在每轮排序后保持相对次序。
+* **核心思想**
+
+  1. **按位分配**（LSD，自低位到高位）：对所有数的第 1 位（个位）进行一次稳定分配排序；
+  2. 再对第 2 位（十位）……直到最高位，共 D 轮；
+  3. 每轮使用计数排序（Counting Sort）在 O(N + B) 时间内完成。
+* **时间复杂度如何优秀**
+
+  * 当 D（位数）视为常数时，整体近似 O(N)；
+  * 适用于数据范围有限、位数不太大的场景。
+
+---
+
+## 2. 数据结构及代码片段解析
+
+```java
+final int radix = 10;
+int[] help = new int[R - L + 1]; // 辅助数组，临时存放本轮排序结果
+int[] count = new int[radix];    // 计数数组，长度 = 基数（0~9）
+```
+
+* **`help`**：同样大小于区间长度，用来收集按照当前位排序后的结果，最后一次性复制回 `arr`。
+* **`count`**：
+
+  * 第一阶段：`count[j]++` 累加当前位等于 j 的元素个数；
+  * 第二阶段：累加前缀和，使 `count[j]` 表示小于等于 j 的元素应放在 `help` 中的最右侧索引 +1。
+* **为什么这样用**：
+
+  * 利用前缀和直接定位每个元素在 `help` 中的正确位置；
+  * 保证**稳定性**：后扫描（从右往左）再放回。
+
+---
+
+## 3. 核心步骤代码解析
+
+```java
+for (int d = 1; d <= digit; d++) {           // 对每一位 d（从 1=个位，到 digit=最高位）
+    Arrays.fill(count, 0);                   // 清零计数
+    // 1) 计数当前位分布
+    for (i = L; i <= R; i++) {
+        j = getDigit(arr[i], d);
+        count[j]++;
+    }
+    // 2) 前缀和 -> 定位
+    for (i = 1; i < radix; i++) {
+        count[i] += count[i - 1];
+    }
+    // 3) 倒序扫描，稳定地分配到 help
+    for (i = R; i >= L; i--) {
+        j = getDigit(arr[i], d);
+        help[count[j] - 1] = arr[i];
+        count[j]--;
+    }
+    // 4) 复制回原数组
+    for (i = L, j = 0; i <= R; i++, j++) {
+        arr[i] = help[j];
+    }
+}
+```
+
+* **第一步**：统计每个数字在第 d 位上是 0…9 的数量。
+* **第二步**：将 `count` 转成**前缀和**，`count[j]` 表示所有 “≤ j” 的元素应放在 `help` 下标 `[0…count[j]-1]` 范围。
+* **第三步**：从右向左遍历原区间，保证当相同第 d 位的元素出现时，**先出现的先放后**，保持稳定。
+* **第四步**：将本轮排序结果一次性写回 `arr`，为下一位排序做准备。
+
+---
+
+## 4. 设计或代码技巧
+
+1. **分批辅助，复制回写**：不在原地移动，避免复杂的元素擦写逻辑。
+2. **前缀和定位**：`count[j] += count[j-1]` 后直接给出「放到哪」的下标上界，省去二分查找。
+3. **倒序扫描保持稳定**：同一桶中后扫描元素先写入高位索引，保证原有相对次序。
+4. **先算位数 `maxbits`**：确定循环轮数 D，避免每轮都重新计算最高位。
+
+---
+
+## 5. 全代码及全面注释
+
+```java
+package class08;
+
+import java.util.Arrays;
+
+public class Code04_RadixSort {
+
+    // 只支持非负整数排序
+    public static void radixSort(int[] arr) {
+        if (arr == null || arr.length < 2) {
+            return;            // 长度 <2 时不需要排序
+        }
+        int d = maxbits(arr); // 最高数字的位数
+        radixSort(arr, 0, arr.length - 1, d);
+    }
+
+    // 计算数组中最大值的十进制位数
+    public static int maxbits(int[] arr) {
+        int max = Integer.MIN_VALUE;
+        for (int x : arr) {
+            max = Math.max(max, x);
+        }
+        int res = 0;
+        // 位数就是不断除以10的次数
+        while (max != 0) {
+            res++;
+            max /= 10;
+        }
+        return res;
+    }
+
+    /**
+     * 核心排序：对 arr[L..R] 范围，根据 1..digit 位执行 D 轮计数排序
+     * @param arr   待排数组
+     * @param L     左边界
+     * @param R     右边界
+     * @param digit 最大位数
+     */
+    public static void radixSort(int[] arr, int L, int R, int digit) {
+        final int radix = 10;                 // 基数为 10
+        int[] help = new int[R - L + 1];      // 辅助数组
+        int[] count = new int[radix];         // 计数数组
+
+        // 逐位排序，从低位 d=1（个位）到 d=digit（最高位）
+        for (int d = 1; d <= digit; d++) {
+            // 1) 清零计数
+            Arrays.fill(count, 0);
+            // 2) 统计每个数字在第 d 位上的出现次数
+            for (int i = L; i <= R; i++) {
+                int j = getDigit(arr[i], d);
+                count[j]++;
+            }
+            // 3) 转成前缀和：count[i] = ≤i 的总数
+            for (int i = 1; i < radix; i++) {
+                count[i] += count[i - 1];
+            }
+            // 4) 倒序扫描原区间，放入 help，保持稳定性
+            for (int i = R; i >= L; i--) {
+                int j = getDigit(arr[i], d);
+                help[count[j] - 1] = arr[i];
+                count[j]--;
+            }
+            // 5) 将本轮排好序的 help 复制回原数组
+            for (int i = L, k = 0; i <= R; i++, k++) {
+                arr[i] = help[k];
+            }
+        }
+    }
+
+    // 获取 x 的第 d 位数字（1=个位，2=十位…）
+    public static int getDigit(int x, int d) {
+        return (x / ((int) Math.pow(10, d - 1))) % 10;
+    }
+
+    // 以下是对数器和测试方法……（省略注释）
+    public static void comparator(int[] arr) { Arrays.sort(arr); }
+    public static int[] generateRandomArray(int mS, int mV) { … }
+    public static int[] copyArray(int[] arr)           { … }
+    public static boolean isEqual(int[] a, int[] b)    { … }
+    public static void printArray(int[] arr)           { … }
+
+    public static void main(String[] args) {
+        // 500 000 次测试，验证正确性
+        int testTime = 500_000, maxSize = 100, maxValue = 100_000;
+        boolean succeed = true;
+        for (int i = 0; i < testTime; i++) {
+            int[] arr1 = generateRandomArray(maxSize, maxValue);
+            int[] arr2 = copyArray(arr1);
+            radixSort(arr1);
+            comparator(arr2);
+            if (!isEqual(arr1, arr2)) {
+                succeed = false;
+                printArray(arr1);
+                printArray(arr2);
+                break;
+            }
+        }
+        System.out.println(succeed ? "Nice!" : "Fucking fucked!");
+        // 随机打印一次演示
+        int[] arr = generateRandomArray(maxSize, maxValue);
+        printArray(arr);
+        radixSort(arr);
+        printArray(arr);
+    }
+}
+```
+
+---
+
+## 6. 易懂示例演示
+
+```java
+int[] arr = { 170,  45,  75,  90, 802, 24, 2, 66 };
+// 假设 maxbits=3，则 d=1→2→3 三轮：
+```
+
+1. **d=1（个位）**，按 0\~9 桶分配：
+
+   * 0 桶：\[170, 90]
+   * 2 桶：\[802, 2]
+   * 4 桶：\[24]
+   * 5 桶：\[75, 45]
+   * 6 桶：\[66]
+     …
+     → 合并后 `help = [170,90,802,2,24,75,45,66]`
+2. **d=2（十位）**，在上一步基础上再按十位排序：
+
+   * 0 桶：\[2]
+   * 1 桶：\[170, 24]
+   * 2 桶：\[802, 90, 75, 66, 45]
+     → `help = [2,170,24,802,90,75,66,45]`
+3. **d=3（百位）**，按百位排序：
+
+   * 0 桶：\[2,170,24,90,75,66,45]
+   * 8 桶：\[802]
+     → 最终 `help = [2,170,24,90,75,66,45,802]`
+
+最终有序：`[2,24,45,66,75,90,170,802]`。
+
+---
+
+## 7. 适用的经典题目
+
+* **大规模非负整数排序**（当 N 很大且比较开销高时）；
+* **固定长度字符串排序**（如身份证号、IP 地址分段）；
+* **外部排序**：分块排序后合并；
+* **桶排序**、**计数排序** 拓展题：理解稳定性与线性排序。
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **“LSD”口诀**：
+
+   > **L**east **S**ignificant **D**igit — 从低位往高位，分 D 轮。
+2. **四步归纳**：
+
+   ```
+   1) 计数 → 2) 前缀和 → 3) 倒序放入 → 4) 复制回写
+   ```
+3. **稳定性要点**：
+
+   * 倒序扫描原数组；
+   * 桶内相等元素保持原顺序。
+4. **核心变量**：
+
+   * `digit`：最高位数；
+   * `help[]`：本轮结果；
+   * `count[]`：前缀和定位。
+5. **复杂度记忆**：
+
+   * 时间 \~ O(D·(N + B))，当 D, B 常数时 \~ O(N)；
+   * 空间 O(N + B)。
+
+---
+
+## 9. 严格基于原代码
+
+以上所有讲解、示例和记忆方法，均严格参照你提供的 **class08.Code04\_RadixSort** 原始实现，未引入任何外部变体。如有任何疑问或想更深入探讨某段逻辑，随时告诉我！
