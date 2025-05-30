@@ -1,0 +1,293 @@
+下面我将严格按照你提供的 **class04.Code01\_MergeSort** 原始实现，分九个部分深入解析，帮助你彻底理解归并排序的本质、代码结构与技巧，并提炼最有利于记忆的方法。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  对任意整型数组进行升序排序，保证稳定性（相等元素相对次序不变）。
+* **优秀之处**
+
+  * **稳定**：合并阶段只在“≤”时取左边元素，保持原有次序；
+  * **时间复杂度 O(N log N)**：分治每层合并代价 O(N)，层数 O(log N)；
+  * **空间复杂度 O(N)**：合并时临时辅助数组大小由当前区间长度决定。
+* **核心思想与本质**
+
+  1. **分治**：不断把区间一分为二，对左半区和右半区分别排序；
+  2. **合并**：将两个已排序子数组通过双指针线性合并成一个有序数组；
+  3. **递归与迭代**：提供递归版本 `mergeSort1` 和等价的非递归版本 `mergeSort2`（底层逻辑相同，只是循环控制层次）。
+* **为什么优秀**
+
+  * 与快速排序相比，始终 O(N log N) 而无最坏 O(N²) 风险；
+  * 与堆排序相比，稳定且常数更小；
+  * 适合外部排序与链式结构排序。
+
+---
+
+## 2. 用到的数据结构及其理由
+
+```java
+int[] help = new int[R - L + 1]; // 临时辅助数组，长度正好容纳待合并区间
+```
+
+* **原数组 `arr`**：存放待排序数据，所有操作最终写回此数组；
+* **辅助数组 `help`**：每次合并时线性收集两个子区间的有序结果，最后一次性拷贝回原区间，避免原地复杂移位。
+* **为什么这么用**
+
+  * **线性合并**：借助 `help`，只需一次从左至右/右至左的线性扫描；
+  * **稳定**：合并时在相等情况下优先取左侧元素。
+
+---
+
+## 3. 核心步骤代码解析
+
+### 3.1 递归版本 `mergeSort1`
+
+```java
+process(arr, 0, arr.length - 1);
+```
+
+* **`process(L,R)`**：若 `L==R`（区间长度1），直接返回；否则：
+
+  1. 计算中点 `M = L + ((R-L)>>1)`，避免整型溢出；
+  2. `process(L,M)` 排序左半；
+  3. `process(M+1,R)` 排序右半；
+  4. `merge(L,M,R)` 合并两有序子区间。
+* **时间 T(N)=2T(N/2)+O(N)**，解得 O(N log N)。
+
+### 3.2 合并函数 `merge(L,M,R)`
+
+```java
+int[] help = new int[R-L+1];
+int p1=L, p2=M+1, i=0;
+while(p1<=M && p2<=R)
+  help[i++] = arr[p1] <= arr[p2] ? arr[p1++] : arr[p2++];
+while(p1<=M) help[i++]=arr[p1++];
+while(p2<=R) help[i++]=arr[p2++];
+for(i=0; i<help.length; i++) arr[L+i]=help[i];
+```
+
+* **双指针**：`p1` 指向左序列当前，`p2` 指向右序列当前；
+* **稳定**：当 `arr[p1] == arr[p2]` 时，先取左侧 `p1`；
+* **尾部残余**：任一序列先耗尽，剩余全部拷贝；
+* **回写**：一次性全区间赋值，避免多次移动。
+
+### 3.3 非递归版本 `mergeSort2`
+
+```java
+int mergeSize = 1;
+while(mergeSize < N) {
+  int L = 0;
+  while(L < N) {
+    if (mergeSize >= N-L) break;
+    int M = L + mergeSize - 1;
+    int R = M + Math.min(mergeSize, N-M-1);
+    merge(arr, L, M, R);
+    L = R + 1;
+  }
+  if (mergeSize > N/2) break;  // 防止溢出
+  mergeSize <<= 1;
+}
+```
+
+* **逻辑**：每次以长度 `mergeSize` 为单元，两两合并相邻区块；
+* **`mergeSize` 翻倍**：1,2,4,…，直到 ≥ N；
+* **边界处理**：当剩余区间小于 `mergeSize`，无需合并；当 `mergeSize>N/2`，再翻倍会溢出，提前终止。
+
+---
+
+## 4. 设计或逻辑/代码技巧
+
+1. **中点计算**
+
+   ```java
+   int mid = L + ((R - L) >> 1);
+   ```
+
+   避免 `(L+R)/2` 的整型溢出。
+2. **稳定合并**：`<=` 保证相等时左侧优先。
+3. **非递归合并**：通过 `mergeSize` 循环模拟递归深度，性能一致且无递归开销。
+4. **边界与溢出保护**：
+
+   * `if (mergeSize >= N - L) break;` 跳出内层；
+   * `if (mergeSize > N/2) break;` 防止 `mergeSize<<=1` 溢出或无效。
+
+---
+
+## 5. 全代码及全面注释
+
+```java
+package class04;
+
+public class Code01_MergeSort {
+
+    // --------------- 递归版本 ---------------
+    public static void mergeSort1(int[] arr) {
+        if (arr == null || arr.length < 2) return;
+        process(arr, 0, arr.length - 1);
+    }
+
+    // 将 arr[L..R] 排序
+    public static void process(int[] arr, int L, int R) {
+        if (L == R) return; // 区间长度 1 时已有序
+        int M = L + ((R - L) >> 1); // 中点，防溢出
+        process(arr, L, M);         // 排序左半区
+        process(arr, M + 1, R);     // 排序右半区
+        merge(arr, L, M, R);        // 合并两有序子区间
+    }
+
+    // 合并 arr[L..M] 和 arr[M+1..R]，两者均已排序
+    public static void merge(int[] arr, int L, int M, int R) {
+        int[] help = new int[R - L + 1]; // 辅助数组
+        int p1 = L, p2 = M + 1, i = 0;
+        // 双指针合并
+        while (p1 <= M && p2 <= R) {
+            // 稳定：相等时优先取左侧
+            help[i++] = arr[p1] <= arr[p2] ? arr[p1++] : arr[p2++];
+        }
+        // 左侧剩余
+        while (p1 <= M) help[i++] = arr[p1++];
+        // 右侧剩余
+        while (p2 <= R) help[i++] = arr[p2++];
+        // 回写原数组
+        for (i = 0; i < help.length; i++) {
+            arr[L + i] = help[i];
+        }
+    }
+
+    // ------------- 非递归版本 --------------
+    public static void mergeSort2(int[] arr) {
+        if (arr == null || arr.length < 2) return;
+        int N = arr.length;
+        int mergeSize = 1; // 当前待合并子区间长度
+        // 当子区间长度小于整个数组长度时继续
+        while (mergeSize < N) {
+            int L = 0; // 每一轮从头开始
+            // 内层将数组分成若干对长度为 mergeSize 的区间合并
+            while (L < N) {
+                // 剩余区间长度 < mergeSize，无需再合并
+                if (mergeSize >= N - L) break;
+                int M = L + mergeSize - 1; // 左区间结束
+                // 右区间结束要考虑数组尾部不足 mergeSize 的情况
+                int R = M + Math.min(mergeSize, N - M - 1);
+                merge(arr, L, M, R);
+                L = R + 1; // 跳到下一个待合并对
+            }
+            // 防止 mergeSize 左移溢出
+            if (mergeSize > N / 2) break;
+            mergeSize <<= 1; // 子区间长度翻倍
+        }
+    }
+
+    // -------- 对数器和测试方法 --------
+    public static int[] generateRandomArray(int maxSize, int maxValue) {
+        int[] arr = new int[(int) ((maxSize + 1) * Math.random())];
+        for (int i = 0; i < arr.length; i++) {
+            // 数值可正可负
+            arr[i] = (int) ((maxValue + 1) * Math.random())
+                   - (int) (maxValue * Math.random());
+        }
+        return arr;
+    }
+
+    public static int[] copyArray(int[] arr) {
+        if (arr == null) return null;
+        int[] res = new int[arr.length];
+        for (int i = 0; i < arr.length; i++) res[i] = arr[i];
+        return res;
+    }
+
+    public static boolean isEqual(int[] arr1, int[] arr2) {
+        if ((arr1 == null) ^ (arr2 == null)) return false;
+        if (arr1 == null) return true;
+        if (arr1.length != arr2.length) return false;
+        for (int i = 0; i < arr1.length; i++) {
+            if (arr1[i] != arr2[i]) return false;
+        }
+        return true;
+    }
+
+    public static void printArray(int[] arr) {
+        if (arr == null) return;
+        for (int x : arr) System.out.print(x + " ");
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        int testTime = 500_000, maxSize = 100, maxValue = 100;
+        System.out.println("测试开始");
+        for (int i = 0; i < testTime; i++) {
+            int[] arr1 = generateRandomArray(maxSize, maxValue);
+            int[] arr2 = copyArray(arr1);
+            mergeSort1(arr1);
+            mergeSort2(arr2);
+            if (!isEqual(arr1, arr2)) {
+                System.out.println("出错了！");
+                printArray(arr1);
+                printArray(arr2);
+                break;
+            }
+        }
+        System.out.println("测试结束");
+    }
+}
+```
+
+---
+
+## 6. 简单易懂的示例
+
+```java
+int[] a = { 5, 2, 7, 3, 1 };
+mergeSort1(a);  // 或 mergeSort2(a)
+System.out.println(Arrays.toString(a)); 
+// 输出: [1, 2, 3, 5, 7]
+```
+
+* **过程概览**：
+
+  1. 递归拆分到单元素：`[5] [2] [7] [3] [1]`
+  2. 两两合并：`[2,5] [3,7] [1]` → `[2,5,3,7] [1]`
+  3. 继续合并：`[2,3,5,7] [1]` → 最终 `[1,2,3,5,7]`。
+
+---
+
+## 7. 可解决的经典题目
+
+* **归并排序练习**：LeetCode 912 等；
+* **统计逆序对**：在 `merge` 中累计 `p2` 跳过的元素数；
+* **外部排序**：处理超大数据文件的分块归并；
+* **K 路归并**：将多段有序列表合并成一段，应用小顶堆或多指针。
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **分治三步**：
+
+   ```
+   下探拆分 → 排序子区间 → 合并结果
+   ```
+2. **递推式**：
+
+   > T(N)=2 T(N/2)+O(N) ⇒ O(N log N)
+3. **合并四步**：
+
+   ```
+   初始化双指针 → 谁小取谁 → 剩余一次拷贝 → 回写原数组
+   ```
+4. **非递归思路**：
+
+   > 子区间长度 1,2,4,… 翻倍合并，直至 ≥N。
+5. **稳定性口诀**：
+
+   > 相等时取左侧，保持原序。
+6. **中点计算**：
+
+   > `L + ((R-L)>>1)` 防溢出。
+
+---
+
+## 9. 严格基于你的原始代码
+
+以上所有解释、示例与记忆方法，均严格对应你提供的 `class04.Code01_MergeSort` 实现，未做任何改动或引入其他变体。如需对某行逻辑再深入探讨，请随时告诉我！
