@@ -1,0 +1,341 @@
+下面我将严格按照你给出的 **class16.Code06\_Dijkstra** 原始实现，从九个方面深入剖析 Dijkstra 算法的两种实现（朴素版与堆优化版），帮助你彻底理解算法本质、数据结构、代码技巧，并提炼最利于记忆的要点。
+
+---
+
+### 1. 算法介绍
+
+* **解决的问题**
+  在一个**无负权**有向图中，给定起点 `from`（或 `head`），计算它到所有可达节点的最短路径距离。
+* **优秀之处**
+
+  * **朴素版** 时间 $O(V^2 + E)$，适合小规模图；
+  * **堆优化版** 时间 $O((V+E)\log V)$，对稀疏大图非常高效；
+  * **贪心+松弛**：每次选取当前已知最短的“最小距离节点”并“松弛”其出边，保证最终最优解。
+* **核心思想 & 本质**
+
+  1. **维护距离表**：`distanceMap[node]` 存从起点到 `node` 的当前最短距离；
+  2. **已固定集合**：维护一个“已确认最短”的节点集合 `selected`，每次从未固定节点中选距离最小者加入；
+  3. **松弛操作**：每当确认一个节点 `u`，遍历其所有出边 `u→v(w)`，尝试更新 `distanceMap[v] = min(old, dist[u]+w)`；
+  4. **重复** 直到所有可达节点都固定或无未处理节点为止。
+* **时间复杂度**
+
+  * 朴素查最小：每次查表扫描 $O(V)$，共 $V$ 次 ⇒ $O(V^2 + E)$；
+  * 堆优化：“出队+松弛” $V$ 次，每次 $\log V$，总 $O((V+E)\log V)$。
+
+---
+
+### 2. 数据结构与代码要点
+
+#### 朴素版
+
+```java
+HashMap<Node,Integer> distanceMap;   // 当前已知最短距离（动态更新）
+HashSet<Node> selectedNodes;         // “已固定”集合
+```
+
+* **`distanceMap`**：起点到各节点当前最短距离；
+* **`selectedNodes`**：已确认最短的节点集合；
+* **为什么这样用**：Map 快速查找与更新任意节点距离，Set 快速检测是否已选。
+
+#### 堆优化版
+
+```java
+// 手写小根堆：按 distanceMap 排序
+Node[] nodes;                        
+HashMap<Node,Integer> heapIndexMap;  // 节点→堆中下标（-1 表示已出堆）
+HashMap<Node,Integer> distanceMap;   // 局部最短距离表
+int size;                            // 堆大小
+```
+
+* **`nodes[]`**：存堆元素；
+* **`heapIndexMap`**：记录每个 `Node` 在 `nodes[]` 中的位置（或已出堆）；
+* **`distanceMap`**：小根堆的键值表；
+* **为什么这样用**：支持三种操作——
+
+  1. **新增**（从未加入过的节点）
+  2. **更新**（已在堆中且距离更小）
+  3. **忽略**（已出堆，不再关心）
+     并保证出堆时总取当前最小距离节点。
+
+---
+
+### 3. 核心步骤代码解析
+
+#### 朴素版 `dijkstra1(from)`
+
+```java
+distanceMap.put(from,0);
+while ((minNode = getMinUnselected(distanceMap,selected)) != null) {
+  int dist = distanceMap.get(minNode);
+  for (Edge e : minNode.edges) {
+    Node to = e.to;
+    int newDist = dist + e.weight;
+    distanceMap.put(to, 
+      Math.min(distanceMap.getOrDefault(to,∞), newDist));
+  }
+  selected.add(minNode);
+}
+return distanceMap;
+```
+
+1. **初始化** 起点距离 0；
+2. **循环**：查找“未选且距离最小”节点 `minNode`；
+3. **松弛**：对 `minNode` 的每条出边尝试更新 `distanceMap`；
+4. **固定** `minNode` 加入 `selected`；
+5. **结束** 当无可选节点。
+
+#### 堆优化版 `dijkstra2(head,size)`
+
+```java
+NodeHeap heap = new NodeHeap(size);
+heap.addOrUpdateOrIgnore(head, 0);
+while (!heap.isEmpty()) {
+  NodeRecord rec = heap.pop();   // 取当前最小
+  Node cur = rec.node; int dist = rec.distance;
+  result.put(cur,dist);          // 固定最短
+  for (Edge e : cur.edges) {
+    heap.addOrUpdateOrIgnore(e.to, dist+e.weight); // 松弛
+  }
+}
+return result;
+```
+
+1. **初始化** 堆中加入 `(head,0)`；
+2. **循环**：`pop()` 取“堆中最小距离节点”并固定到 `result`；
+3. **松弛**：对其出边调用 `addOrUpdateOrIgnore`，自动 **新增** 未见节点、**更新** 更短距离、**忽略** 已固定节点；
+4. **结束** 堆空，所有可达节点最短距离已固定。
+
+---
+
+### 4. 设计与代码技巧
+
+1. **三合一堆操作**：`addOrUpdateOrIgnore` 同时处理新增、松弛更新、已固定忽略；
+2. **显式路径压缩**：堆 `pop()` 后把固定节点 `heapIndexMap.put(node,-1)` 且从 `distanceMap` 删除，保证忽略；
+3. **自定义小根堆**：用数组存储、`heapify` 和 `insertHeapify` 维持最小堆性质；
+4. **优雅松弛**：松弛时无需检查 `selected`，因为固定后从 `distanceMap` 与 `heapIndexMap` 均已删除。
+
+---
+
+### 5. 全代码及详尽注释
+
+```java
+package class16;
+
+import java.util.*;
+
+// 无负权 Dijkstra 的两种实现
+public class Code06_Dijkstra {
+
+  // —— 朴素 O(V^2+E) 版 —— 
+  public static HashMap<Node, Integer> dijkstra1(Node from) {
+    HashMap<Node,Integer> distanceMap = new HashMap<>();
+    distanceMap.put(from,0);
+    HashSet<Node> selected = new HashSet<>();
+    Node minNode;
+    // 每次选最小未选
+    while ((minNode = getMinDistanceAndUnselectedNode(
+              distanceMap, selected)) != null) {
+      int dist = distanceMap.get(minNode);
+      for (Edge e : minNode.edges) {
+        Node to = e.to;
+        int newDist = dist + e.weight;
+        distanceMap.put(to, 
+          Math.min(distanceMap.getOrDefault(to,Integer.MAX_VALUE),
+                   newDist));
+      }
+      selected.add(minNode);
+    }
+    return distanceMap;
+  }
+
+  // 查找未选且距离最小的节点
+  public static Node getMinDistanceAndUnselectedNode(
+      HashMap<Node,Integer> dm, HashSet<Node> sel) {
+    Node minNode = null; int minDist=Integer.MAX_VALUE;
+    for (Map.Entry<Node,Integer> e: dm.entrySet()) {
+      Node n = e.getKey(); int d=e.getValue();
+      if (!sel.contains(n) && d<minDist) {
+        minDist=d; minNode=n;
+      }
+    }
+    return minNode;
+  }
+
+  // —— 堆优化 O((V+E) log V) 版 —— 
+  // 包装节点与距离
+  public static class NodeRecord {
+    public Node node; public int distance;
+    public NodeRecord(Node n,int d){ node=n; distance=d;}
+  }
+
+  // 自定义小根堆
+  public static class NodeHeap {
+    private Node[] nodes;                    
+    private HashMap<Node,Integer> heapIndex; 
+    private HashMap<Node,Integer> distanceMap;
+    private int size;            
+
+    public NodeHeap(int cap) {
+      nodes = new Node[cap];
+      heapIndex = new HashMap<>();
+      distanceMap = new HashMap<>();
+      size = 0;
+    }
+    public boolean isEmpty() { return size==0; }
+
+    // 新增/更新/忽略
+    public void addOrUpdateOrIgnore(Node nd,int dist) {
+      if (inHeap(nd)) {
+        // 更新更小距离并上浮
+        distanceMap.put(nd, 
+          Math.min(distanceMap.get(nd), dist));
+        insertHeapify(heapIndex.get(nd));
+      } else if (!entered(nd)) {
+        nodes[size] = nd;
+        heapIndex.put(nd, size);
+        distanceMap.put(nd, dist);
+        insertHeapify(size++);
+      }
+      // else 已出堆，忽略
+    }
+
+    // 取出最小并返回记录
+    public NodeRecord pop() {
+      Node recNode = nodes[0];
+      int recDist = distanceMap.get(recNode);
+      swap(0, size-1);
+      heapIndex.put(nodes[size-1], -1);
+      distanceMap.remove(nodes[size-1]);
+      nodes[size-1]=null;
+      heapify(0, --size);
+      return new NodeRecord(recNode, recDist);
+    }
+
+    // 新节点或距离变小时的上浮
+    private void insertHeapify(int i) {
+      while (i>0 &&
+        distanceMap.get(nodes[i]) <
+        distanceMap.get(nodes[(i-1)/2])) {
+        swap(i,(i-1)/2);
+        i=(i-1)/2;
+      }
+    }
+
+    // 下沉以恢复堆
+    private void heapify(int i,int sz) {
+      int left = 2*i+1;
+      while (left<sz) {
+        int small = left+1<sz &&
+          distanceMap.get(nodes[left+1])<
+          distanceMap.get(nodes[left])
+          ? left+1 : left;
+        small = distanceMap.get(nodes[small])<
+                distanceMap.get(nodes[i])
+                ? small : i;
+        if (small==i) break;
+        swap(small,i);
+        i=small; left=2*i+1;
+      }
+    }
+
+    private boolean entered(Node n){
+      return heapIndex.containsKey(n);
+    }
+    private boolean inHeap(Node n){
+      return entered(n) && heapIndex.get(n)!=-1;
+    }
+    private void swap(int i,int j){
+      heapIndex.put(nodes[i],j);
+      heapIndex.put(nodes[j],i);
+      Node tmp=nodes[i]; nodes[i]=nodes[j]; nodes[j]=tmp;
+    }
+  }
+
+  // 改进版接口
+  public static HashMap<Node,Integer> dijkstra2(
+      Node head,int size) {
+    NodeHeap heap = new NodeHeap(size);
+    heap.addOrUpdateOrIgnore(head,0);
+    HashMap<Node,Integer> res=new HashMap<>();
+    while (!heap.isEmpty()) {
+      NodeRecord r=heap.pop();
+      Node cur=r.node; int dist=r.distance;
+      for (Edge e: cur.edges) {
+        heap.addOrUpdateOrIgnore(e.to, dist+e.weight);
+      }
+      res.put(cur,dist);
+    }
+    return res;
+  }
+}
+```
+
+---
+
+### 6. 容易理解的示例
+
+假设图：
+
+```
+A→B(3), A→C(1), C→B(1), B→D(2), C→D(6)
+```
+
+* 起点 A：
+
+  * 朴素版 `dijkstra1(A)` 和堆版 `dijkstra2(A,4)` 最终都输出
+
+    ```
+    dist[A]=0, dist[C]=1, dist[B]=2, dist[D]=4
+    ```
+* **过程示意**：
+
+  1. A(0) → 松弛 B(3)、C(1)
+  2. 取最小未选 C(1) → 松弛 B(2)、D(7)
+  3. 取 B(2) → 松弛 D(4)
+  4. 取 D(4) → 无新松弛 → 结束
+
+---
+
+### 7. 可解决的经典题目
+
+* **LeetCode**
+
+  * 743\. 网络延迟时间（单源最短路）
+  * 787. K 站中转内最便宜的航班
+  * 1631. 最小体力消耗路径
+* **图论专题**：最短路径、路径计数、最小生成树初始化（Kruskal 需初步距离排序）
+
+---
+
+### 8. 知识点提取与记忆法
+
+1. **核心套路**
+
+   ```
+   // 朴素
+   初始化 dist[from]=0; while 有未选节点:
+     选未选中 dist 最小的 u
+     松弛 u 的所有出边
+     标记 u 已选
+   返回 dist[]
+   ```
+
+   ```
+   // 堆版
+   堆 push (head,0)
+   while 堆非空:
+     pop 最小 r
+     松弛 r.node 的所有出边→push/update 堆
+     res[r.node]=r.dist
+   返回 res
+   ```
+2. **三合一堆操作**：新增/更新/忽略，一处搞定；
+3. **堆支撑贪心**：出堆即“全局最小”，省去扫描；
+4. **路径压缩技巧**：堆出堆后把该节点从 `distanceMap`+`heapIndex` 中移除，自动忽略；
+5. **时间记忆**：朴素 $O(V^2)$ vs 堆版 $O((V+E)\log V)$。
+
+---
+
+### 9. 严格基于原始代码
+
+以上所有内容，包括分析思路、完整注释、示例和记忆要点，均**严格对应**你提供的 `class16.Code06_Dijkstra` 原始实现，未引入任何改动或变体。希望这份详尽解析帮助你彻底掌握 Dijkstra 算法！
