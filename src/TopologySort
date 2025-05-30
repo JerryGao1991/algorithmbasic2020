@@ -1,0 +1,214 @@
+下面我将严格按照你提供的 **class16.Code03\_TopologySort** 原始实现，从九个方面做深入详解，帮助你彻底掌握拓扑排序算法及其代码技巧，并提炼便于记忆的规律。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  对一个**无环有向图**（DAG）进行排序，使得每条有向边 `(u→v)` 在输出序列中都满足 `u` 在 `v` 之前。
+* **优秀之处**
+
+  * **线性时间**：遍历所有节点和所有边各一次，时间复杂度 O(V+E)；
+  * **简洁易懂**：利用入度信息和队列即可完成。
+* **核心思想与本质**
+
+  1. 先统计每个节点的“剩余入度”（初始即原入度）；
+  2. 把入度为 0 的节点加入队列——它们没有前驱，可以最先输出；
+  3. 反复从队列取出一个节点 `u`，输出它，然后遍历它的所有出边 `u→v`，把 `v` 的剩余入度减 1；
+  4. 当某个 `v` 的剩余入度变为 0 时，加入队列；
+  5. 队列空时输出完成（若输出节点数 < 原图节点数，则图中存在环）。
+* **时间复杂度**
+
+  * 统计入度 O(V)
+  * 每条边只处理一次——更新入度并入队/不入队，总计 O(E)
+  * 总计：O(V+E)
+
+---
+
+## 2. 数据结构解析
+
+```java
+HashMap<Node, Integer> inMap;    // 存每个节点的当前剩余入度
+Queue<Node> zeroInQueue;        // 存所有剩余入度为 0 的节点
+List<Node> result;              // 按拓扑顺序收集输出节点
+```
+
+* **`inMap`**：使用 `HashMap` 存储每个节点的剩余入度，方便快速更新与查询；
+* **`zeroInQueue`**：队列保证先发现的“入度 0”节点先输出，实现层次推进；
+* **`result`**：线性数组最终存放拓扑排序结果。
+* **为什么这样用**：
+
+  * Map 使得节点对象可直接作为键，不必重新编号；
+  * 队列天然契合“先进先出”——保证按照发现时序输出；
+  * 线性列表按顺序收集，最后即可返回或打印。
+
+---
+
+## 3. 核心步骤代码解析
+
+```java
+// 1) 初始化：统计每个节点的入度，并把入度为0的节点入队
+for (Node node : graph.nodes.values()) {
+    inMap.put(node, node.in);
+    if (node.in == 0) {
+        zeroInQueue.add(node);
+    }
+}
+
+// 2) 主循环：只要队列非空，就取一个出来输出，并更新它的邻居入度
+while (!zeroInQueue.isEmpty()) {
+    Node cur = zeroInQueue.poll();   // 出队一个“入度0”节点
+    result.add(cur);                 // 输出它
+    for (Node next : cur.nexts) {    // 遍历它的所有出边 cur→next
+        inMap.put(next, inMap.get(next) - 1);         // next 的入度减1
+        if (inMap.get(next) == 0) {   // 若变为 0 就入队
+            zeroInQueue.add(next);
+        }
+    }
+}
+
+// 3) 返回收集到的拓扑序列
+return result;
+```
+
+* **初始化阶段**：把所有节点的原入度复制到 `inMap`，并挑出最先能访问的入度 0 节点；
+* **循环阶段**：
+
+  1. **取出** 当前可访问节点 `cur`；
+  2. **记录** 到结果 `result`；
+  3. **遍历** `cur.nexts`（所有 `cur` 的直接后继），将它们的剩余入度减 1；
+  4. **检查** 每个后继是否刚好变为 0，如果是就加入队列——下轮可以访问；
+* **结束**：队列空时，所有可达节点都按拓扑顺序输出。
+
+---
+
+## 4. 设计或代码技巧
+
+1. **一次统计入度**：把原图中每个节点的 `in` 字段一次性复制到 `inMap`，后续不再访问原字段；
+2. **只进队一次**：只有当入度恰好从 1→0 时，将节点入队，保证每个节点只进队出队一次；
+3. **Map+Queue 组合**：通用且高效，支持任意 `Node` 对象；
+4. **无需环检测**：若需要检测环，只需在最后检查 `result.size() < graph.nodes.size()` 即可。
+
+---
+
+## 5. 全代码及详尽注释
+
+```java
+package class16;
+
+import java.util.*;
+
+/**
+ * 拓扑排序：对无环有向图输出合法的节点线性序
+ */
+public class Code03_TopologySort {
+
+    /**
+     * @param graph 输入的有向无环图，包含所有节点和它们的出边列表
+     * @return      节点的一个拓扑排序序列（可能不唯一）
+     */
+    public static List<Node> sortedTopology(Graph graph) {
+        // 1) 构建 inMap，统计每个节点的剩余入度
+        HashMap<Node, Integer> inMap = new HashMap<>();
+        // 2) 队列：存所有“当前入度为 0”节点
+        Queue<Node> zeroInQueue = new LinkedList<>();
+
+        for (Node node : graph.nodes.values()) {
+            inMap.put(node, node.in);
+            if (node.in == 0) {
+                zeroInQueue.add(node);
+            }
+        }
+
+        // 3) 拓扑结果容器
+        List<Node> result = new ArrayList<>();
+
+        // 4) 当还有入度0的节点时，不断输出并更新后继节点的入度
+        while (!zeroInQueue.isEmpty()) {
+            Node cur = zeroInQueue.poll();   // 取出一个入度0节点
+            result.add(cur);                 // 加入结果
+            // 遍历所有 cur 的出边
+            for (Node next : cur.nexts) {
+                // next 剩余入度减 1
+                inMap.put(next, inMap.get(next) - 1);
+                // 如果变为 0，就可以加入队列
+                if (inMap.get(next) == 0) {
+                    zeroInQueue.add(next);
+                }
+            }
+        }
+        // 5) 返回拓扑序列（若需要环检测，可在此检查 result.size()<总节点数）
+        return result;
+    }
+
+    // 假定 Graph 与 Node 定义如下：
+    // class Graph { public HashMap<Integer,Node> nodes; }
+    // class Node {
+    //   public int value;
+    //   public int in;            // 原始入度
+    //   public List<Node> nexts;  // 所有出边指向的后继节点
+    // }
+
+}
+```
+
+---
+
+## 6. 容易理解的示例
+
+```java
+// 假设有如下 DAG：
+//     A
+//    / \
+//   B   C
+//    \ /
+//     D
+
+// 构造：
+Node A = new Node('A'); Node B=new Node('B');
+Node C = new Node('C'); Node D=new Node('D');
+A.nexts = List.of(B,C); B.nexts=List.of(D);
+C.nexts = List.of(D);  D.nexts=List.of();
+
+A.in=0; B.in=1; C.in=1; D.in=2;
+Graph g = new Graph(Map.of('A',A,'B',B,'C',C,'D',D));
+
+// 调用拓扑排序
+List<Node> topo = sortedTopology(g);
+// 一种合法输出： [A, B, C, D]
+// 也可能是      [A, C, B, D]
+```
+
+---
+
+## 7. 经典题目与应用
+
+* **课程安排**：LeetCode 210. Course Schedule II
+* **任务调度**：确定任务依赖顺序
+* **编译顺序**：模块/包依赖关系解析
+* **版本控制合并**：Git 拓扑排序实用场景
+* **环检测**：若输出序列长度<节点数，可判断存在环
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **“入度-队列-出度”** 口诀：
+
+   ```
+   统计入度 → 入度0入队 → 出队输出 → 后继入度减1 → 新入度0入队 → 重复
+   ```
+2. **三大结构**：
+
+   * `inMap`：剩余入度
+   * `zeroInQueue`：当前可输出节点
+   * `result`：拓扑序列
+3. **时间 O(V+E)**、空间 O(V) 记忆：遍历节点一次、边一次。
+4. **环检测**：输出数小于总节点数即有环。
+5. **可复用**：同样模式可用于 Kahn 算法、最短路径 DAG DP 等。
+
+---
+
+## 9. 严格基于原始代码
+
+以上所有分析、示例、记忆方法，均 **严格对应** 你提供的 `class16.Code03_TopologySort` 实现，未做任何简化或变体。希望对你深入理解拓扑排序大有裨益！
