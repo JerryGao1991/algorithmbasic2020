@@ -1,0 +1,246 @@
+下面我将严格按照你给出的 **Code05\_UnionFind**（基于 `HashMap` 的并查集）原始实现，从九个方面做详尽解析，帮助你深入理解并查集的本质和这段代码的设计巧思，并提炼记忆要点。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**：维护若干个不相交集合，支持快速的 **合并**（union）和 **查询同一集合**（find/isSameSet）操作。常用于动态连通性、群组管理等场景。
+* **优秀之处**：
+
+  1. **摊销几乎常数时间**：借助 **路径压缩** 与 **按秩合并**（这里按“大小”合并），把多次操作摊销到接近 O(α(N))（极慢增长的阿克曼反函数）。
+  2. **灵活泛型**：用 `HashMap<V,V>` 支持任意类型节点，而不仅限于整数下标。
+* **核心思想**：
+
+  1. 每个元素指向一个“父”节点，最终指向代表元（根）；
+  2. **Find**：沿父指针上溯到根，同时将路径上的节点直接挂到根上（路径压缩）；
+  3. **Union**：把两个集合的根合并，通常把小树挂到大树下（按大小合并），保持树的扁平度。
+* **时间复杂度**：几乎 O(1) 摊销——确切地说是 O(α(N))，α 为阿克曼反函数，增长极其缓慢。
+
+---
+
+## 2. 数据结构与代码要点
+
+```java
+public HashMap<V,V> father;   // 每个节点指向的父节点
+public HashMap<V,Integer> size; // 以代表元为键的集合大小
+```
+
+* **`father`**：记录每个节点的直接父节点；根节点指向自己。
+* **`size`**：仅对 **根节点** 有意义，记录该集合的元素数量，用于按大小合并。
+* **为什么这样用**：
+
+  * **Map** 版本支持 **任意对象** 作为节点，不必预先给出连续下标。
+  * **`size` 存根节点**，便于快速比较两棵树的大小。
+
+---
+
+## 3. 核心步骤解析
+
+### 构造器
+
+```java
+public UnionFind(List<V> values) {
+    for (V cur : values) {
+        father.put(cur, cur); // 自己的父亲先指向自己
+        size.put(cur, 1);     // 每个初始集合大小为 1
+    }
+}
+```
+
+### 找到代表元 `findFather(V cur)`
+
+```java
+Stack<V> path = new Stack<>();
+while (cur != father.get(cur)) {
+    path.push(cur);
+    cur = father.get(cur);
+}
+// 此时 cur 是根，将路径上所有节点直接挂到根
+while (!path.isEmpty()) {
+    father.put(path.pop(), cur);
+}
+return cur;
+```
+
+* **先收集**：将沿路节点推入栈，直到到达根。
+* **路径压缩**：弹栈时把所有沿路节点的父直接设为根，扁平化树。
+
+### 判断同一集合 `isSameSet(V a, V b)`
+
+```java
+return findFather(a) == findFather(b);
+```
+
+* **同一根** ⇒ 同一集合。
+
+### 合并 `union(V a, V b)`
+
+```java
+V aRoot = findFather(a), bRoot = findFather(b);
+if (aRoot != bRoot) {
+    int aSize = size.get(aRoot), bSize = size.get(bRoot);
+    if (aSize >= bSize) {
+        father.put(bRoot, aRoot);
+        size.put(aRoot, aSize + bSize);
+        size.remove(bRoot);
+    } else {
+        father.put(aRoot, bRoot);
+        size.put(bRoot, aSize + bSize);
+        size.remove(aRoot);
+    }
+}
+```
+
+* **按大小合并**：把小集合的根挂到大集合的根下，更新大根的 `size`，并删除小根的 `size` 记录。
+
+### 查询集合数目 `sets()`
+
+```java
+return size.size();
+```
+
+* `size` 的键数即当前根节点数，即不相交集合的数量。
+
+---
+
+## 4. 设计与逻辑/代码技巧
+
+1. **路径压缩**：在 `findFather` 中一并拉扁路径，大幅降低后续查找成本。
+2. **按大小合并**：每次将小树挂到大树，保持合并后树的高度尽可能低。
+3. **Map 可拓展性**：Generic 版本适合面试题或处理非整数对象；实际生产中更常用数组版。
+4. **移除旧根大小**：合并后删除被挂根的 `size`，保持 `size` 只包含当前根节点的数据。
+
+---
+
+## 5. 全代码及详尽注释
+
+```java
+package class14;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Stack;
+
+/** Map 版并查集（支持任意类型 V） */
+public class Code05_UnionFind {
+
+    public static class UnionFind<V> {
+        public HashMap<V, V> father;    // 节点→父节点
+        public HashMap<V, Integer> size; // 根节点→其集合大小
+
+        /** 初始化，每个元素自成集合 */
+        public UnionFind(List<V> values) {
+            father = new HashMap<>();
+            size   = new HashMap<>();
+            for (V cur : values) {
+                father.put(cur, cur); // 父指向自己
+                size.put(cur, 1);     // 大小=1
+            }
+        }
+
+        /** 查找并压缩路径，返回代表元 */
+        public V findFather(V cur) {
+            Stack<V> path = new Stack<>();
+            // 1) 上溯到根
+            while (cur != father.get(cur)) {
+                path.push(cur);
+                cur = father.get(cur);
+            }
+            // 2) 路径压缩：将沿路所有节点直接挂到根
+            while (!path.isEmpty()) {
+                father.put(path.pop(), cur);
+            }
+            return cur;
+        }
+
+        /** 判断 a、b 是否在同一集合 */
+        public boolean isSameSet(V a, V b) {
+            return findFather(a) == findFather(b);
+        }
+
+        /** 合并 a、b 所在的集合（按大小） */
+        public void union(V a, V b) {
+            V aRoot = findFather(a), bRoot = findFather(b);
+            if (aRoot != bRoot) {
+                int aSize = size.get(aRoot);
+                int bSize = size.get(bRoot);
+                // 把小树挂到大树
+                if (aSize >= bSize) {
+                    father.put(bRoot, aRoot);
+                    size.put(aRoot, aSize + bSize);
+                    size.remove(bRoot);
+                } else {
+                    father.put(aRoot, bRoot);
+                    size.put(bRoot, aSize + bSize);
+                    size.remove(aRoot);
+                }
+            }
+        }
+
+        /** 当前不相交集合的数量 */
+        public int sets() {
+            return size.size();
+        }
+    }
+}
+```
+
+---
+
+## 6. 易懂示例演示
+
+```java
+List<String> vals = Arrays.asList("A","B","C","D","E");
+UnionFind<String> uf = new UnionFind<>(vals);
+
+// 合并几对
+uf.union("A","B"); // {A,B}, {C}, {D}, {E}
+uf.union("C","D"); // {A,B}, {C,D}, {E}
+uf.union("B","C"); // {A,B,C,D}, {E}
+
+// 检查
+uf.isSameSet("A","D"); // true
+uf.isSameSet("A","E"); // false
+
+// 集合数目
+uf.sets();             // 2
+```
+
+---
+
+## 7. 可解决的经典题目
+
+* **并查集专题**
+
+  * LeetCode 1319：连通网络的数目
+  * LeetCode 990：等式方程的可满足性
+  * LeetCode 839：相似字符串组
+  * Kruskal 最小生成树
+  * 动态连通性、等价关系合并
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **DSU 核心口诀**：
+
+   ```
+   Find：一路上溯压扁，挂到根
+   Union：小树挂大树，更新大小
+   ```
+2. **结构记忆**：
+
+   * `father`: 每个点指“父”，根指自己；
+   * `size`：只存根节点大小。
+3. **路径压缩**：用栈或递归，压扁路径，每次查找后深度≈1。
+4. **按秩合并**：按大小（或高度）合并，防止树高线性增长。
+5. **Map 版 vs 数组版**：
+
+   * Map 版适合泛型、面试演示；
+   * 数组版更高效、实战常用。
+
+---
+
+## 9. 严格基于原始代码
+
+以上所有分析、示例及记忆方法，都 **严格对应** 你提供的 `class14.Code05_UnionFind` Map 实现，未做任何增删或变体。希望对你深入理解并查集大有帮助！
