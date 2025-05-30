@@ -1,0 +1,202 @@
+下面我将严格按照你给出的 **class16.Code02\_DFS** 原始实现，分九个方面做详尽解析，帮助你深入理解“图的深度优先遍历（DFS）”的非递归实现及其精妙之处，并提炼最有利于记忆的规律。
+
+---
+
+### 1. 算法介绍
+
+* **解决的问题**：给定图中的一个起始节点 `node`，对该节点所有可达节点进行 **深度优先遍历**（DFS），并在遍历过程中打印每个节点的 `value`。
+* **优秀之处**：
+
+  1. **非递归实现**：用显式栈避免递归，节省系统调用栈空间，适合大图；
+  2. **一行代码“回退”**：通过先将 `cur` 重新压栈、再压 `next`，实现只深入一条路径后自动回退继续其他分支；
+  3. **标记访问**：用 `HashSet` 防止重复节点访问和环中无限循环。
+* **核心思想**：
+
+  * 利用栈（LIFO）模拟递归的回溯行为：每次从当前节点探索下一个未访问邻居并“深入”，否则自动弹栈“回退”。
+* **时间复杂度**：$O(V + E)$，每个节点和每条边最多检查一次。
+* **空间复杂度**：$O(V)$，栈与访问集合最多存放所有节点。
+
+---
+
+### 2. 用到的数据结构与关键代码
+
+```java
+Stack<Node> stack   = new Stack<>();
+HashSet<Node> set   = new HashSet<>();
+```
+
+* **`Stack<Node>`**：保存“回退点”和下一个要访问的节点，用以手动管理递归深度和回溯。
+* **`HashSet<Node>`**：记录已经访问过的节点，防止重复入栈和死循环。
+* **`Node.nexts`**：节点的邻接列表，提供所有可直接到达的下一个节点。
+* **为什么这样用**：
+
+  * **栈** 完美模拟系统调用栈的“后进先出”，实现深度搜索；
+  * **集合** 高效判断访问状态，节点只会访问一次。
+
+---
+
+### 3. 核心步骤代码解析
+
+```java
+public static void dfs(Node node) {
+    if (node == null) return;                   // 空图直接返回
+
+    stack.add(node);    set.add(node);          // 起点入栈并标记
+    System.out.println(node.value);            // 访问起点
+
+    while (!stack.isEmpty()) {
+        Node cur = stack.pop();                 // 取当前处理节点
+        for (Node next : cur.nexts) {           // 遍历其所有邻居
+            if (!set.contains(next)) {          // 找到第一个未访问过的
+                stack.push(cur);                // 1) 先回溯点入栈
+                stack.push(next);               // 2) 再深入点入栈
+                set.add(next);                  // 3) 标记已访问
+                System.out.println(next.value); // 4) 访问该节点
+                break;                          // 5) 只处理一个邻居，执行“深入”
+            }
+        }
+        // 若 cur 没有未访问的邻居，则本次 pop 相当于“回退”，不再压栈
+    }
+}
+```
+
+* **初始化**：将起点入栈、标记并打印。
+* **主循环**：只要 `stack` 非空：
+
+  1. 弹出栈顶 `cur`；
+  2. 在它所有邻居中找第一个未访问的 `next`；
+  3. 若找到：
+
+     * **先**把 `cur` 重新压回栈（回溯点），
+     * **后**压 `next`（深入点），
+     * 标记并打印 `next`，
+     * **中断循环**，立即处理 `next`。
+  4. 如果 `cur` 没有未访问邻居，则不压回栈，等于回溯上一级。
+
+---
+
+### 4. 设计或逻辑巧思
+
+1. **压栈顺序**：`push(cur)`→`push(next)`，保证下次 `pop()` 先得到 `next`（深入），访问完该分支再回到 `cur`（回退）。
+2. **一次只深入一条分支**：`break` 后不再检查剩余邻居，符合 DFS “深”优先策略。
+3. **隐式回退**：当 `cur` 没有未访问邻居时，直接不压栈，自动从栈里回到上层。
+4. **先访问再压栈 vs 先压后访问**：此处先压入再打印，保证打印顺序紧跟深入。
+
+---
+
+### 5. 全代码及详尽注释
+
+```java
+package class16;
+
+import java.util.HashSet;
+import java.util.Stack;
+
+/**
+ * 图的深度优先遍历（非递归版 DFS）
+ */
+public class Code02_DFS {
+
+    /**
+     * 假定 Node 类定义如下：
+     *   public class Node {
+     *     public int value;
+     *     public List<Node> nexts; // 邻接节点列表
+     *   }
+     */
+
+    public static void dfs(Node node) {
+        if (node == null) {
+            return;                 // 空图或空起点
+        }
+        // 栈与访问集合初始化
+        Stack<Node> stack = new Stack<>();
+        HashSet<Node> set = new HashSet<>();
+
+        // 起点入栈、标记、访问
+        stack.add(node);
+        set.add(node);
+        System.out.println(node.value);
+
+        // 非递归 DFS 核心
+        while (!stack.isEmpty()) {
+            Node cur = stack.pop();            // 取当前节点
+            // 遍历当前节点的所有邻居
+            for (Node next : cur.nexts) {
+                if (!set.contains(next)) {     // 找到第一个未访问过的邻居
+                    stack.push(cur);           // 1) 回退点先入栈
+                    stack.push(next);          // 2) 深入点后入栈
+                    set.add(next);             // 3) 标记已访问
+                    System.out.println(next.value); // 4) 访问该节点
+                    break;                     // 5) 只处理一个邻居，开始“深入”
+                }
+            }
+            // 如果 cur 没有可深入的邻居，本次 pop 即为“回退”，不再压栈
+        }
+    }
+
+}
+```
+
+---
+
+### 6. 简单易懂的示例
+
+假设图结构如下（邻接）：
+
+```
+A → B → D
+↓
+C → E
+```
+
+对应代码：
+
+```java
+Node A = new Node("A"), B=new Node("B"), C=new Node("C");
+Node D = new Node("D"), E=new Node("E");
+A.nexts = List.of(B,C);
+B.nexts = List.of(D);
+C.nexts = List.of(E);
+D.nexts = List.of();
+E.nexts = List.of();
+
+dfs(A); // 输出访问顺序： A, B, D, C, E
+```
+
+* **步骤示意**：
+
+  1. 访问 A；
+  2. 深入 B，访问 B；
+  3. 深入 D，访问 D；D 无邻居，回退到 B→A；
+  4. A 的下一个邻居 C，访问 C；
+  5. 深入 E，访问 E；结束。
+
+---
+
+### 7. 适用的经典题目
+
+* **图遍历与连通性**：LeetCode 797. All Paths From Source to Target
+* **迷宫路径搜索**：无权图所有路径或是否存在路径
+* **拓扑排序 DFS 版**：LeetCode 207. Course Schedule
+* **二叉树非递归遍历**：Preorder/Postorder 也可用类似思路
+
+---
+
+### 8. 知识点提取与记忆法
+
+1. **DFS 栈操作口诀**：
+
+   ```
+   pop cur → 找首未访问 next → push(cur)→push(next)→visit(next)
+   ```
+2. **回退即不压栈**：当 cur 无未访问邻居时，pop 自动回上一层。
+3. **访问顺序**：每入栈一次“深入”，对应一次打印。
+4. **空间 O(V)**：栈与集合各最多存放所有节点。
+5. **对比 BFS**：BFS `add` 全邻居再 `poll`，DFS `push` 回退点再 `push` 单一邻居。
+
+---
+
+### 9. 严格基于原始代码
+
+以上所有分析、示例和记忆方法，均 **严格对应** 你提供的 `class16.Code02_DFS` 非递归 DFS 实现，未做任何改动或简化。希望这份详尽解析能帮助你彻底掌握迭代版 DFS！
