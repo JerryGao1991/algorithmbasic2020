@@ -1,0 +1,280 @@
+下面我将严格按照你给出的 **class09.Code02\_IsPalindromeList** 实现，分九个部分深入解析，帮助你彻底理解判断单链表回文的三种方法及其技巧，并提炼最有利于记忆的规律。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**：判断一个单向链表是否是回文结构（A→B→C→B→A）。
+* **优秀之处**：
+
+  * 提供了 **三种空间复杂度** 的解法：
+
+    1. O(N) 额外空间（全压栈）
+    2. O(N/2) 额外空间（压后半段）
+    3. O(1) 额外空间（原地反转后半段并恢复）
+  * **核心思想**：
+
+    1. 利用 **栈** 的后进先出特性，与链表前序对应；
+    2. 使用 **快慢指针** 找到链表中点；
+    3. 对链表后半段 **原地反转**，与前半段逐一比对，再 **恢复链表**。
+* **时间复杂度**：三种方法均为 O(N)
+* **空间复杂度**：分别为 O(N)、O(N/2)、O(1)
+
+---
+
+## 2. 数据结构及代码要点
+
+```java
+public static class Node {
+    public int value;
+    public Node next;
+    public Node(int data) { this.value = data; }
+}
+```
+
+* **Node**：单链表节点，保存整型 `value` 与后继 `next`；
+* **Stack<Node>**：在前两种方法中，存放节点引用以便后序访问；
+* **快慢指针**：`n1`（慢）、`n2`（快）用来定位中点；
+* **原地反转**：通过指针反向操作，不申请新节点。
+
+---
+
+## 3. 核心步骤代码解析
+
+### 方法一：全链入栈 O(N)
+
+```java
+Stack<Node> stack = new Stack<>();
+// 1) 遍历链表，将所有节点入栈
+// 2) 再次遍历链表，每取一个 head.value，栈顶弹出比较
+//    若有任意不等，立即返回 false
+// 3) 比较完毕返回 true
+```
+
+### 方法二：后半截入栈 O(N/2)
+
+```java
+// 1) 特判空或单节点：直接返回 true
+// 2) 找到链表中点：快指针走两步、慢指针走一步，结束时 slow 指向中点或左中点
+// 3) slow.next 开始的后半段全部入栈
+// 4) 从链表头与栈中节点依次比较，若不等返回 false，否则 true
+```
+
+### 方法三：原地反转 O(1)
+
+```java
+// 1) 快慢指针定位中点 n1：slow n1 走一步、快 n2 走两步
+// 2) n2 = n1.next；断开左半链表：n1.next=null
+// 3) 原地反转从 n2 开始的后半段：标准链表反转
+//    循环中用 n3 暂存 next，逐个反转指针方向，最终 n1 指向尾节点
+// 4) 使用两个指针 n2（尾到中点）、n2=head 同时比对，若不等标记 res=false
+// 5) 再次反转回原链表：同第3步循环反向操作，恢复 n1.next
+// 6) 返回 res
+```
+
+---
+
+## 4. 精妙设计与代码技巧
+
+1. **快慢指针找中点**：`while(n2.next!=null && n2.next.next!=null){ n1=n1.next; n2=n2.next.next; }`
+2. **三种空间-时间折中**：按需求选择最适合的方法。
+3. **原地反转+恢复**：既满足 O(1) 空间，又不破坏原链表结构。
+4. **稳定的比较顺序**：反转后用尾→头与头→中点同步遍历，比对更直观。
+
+---
+
+## 5. 全代码及详尽注释
+
+```java
+package class09;
+
+import java.util.Stack;
+
+public class Code02_IsPalindromeList {
+
+    // 链表节点定义
+    public static class Node {
+        public int value;
+        public Node next;
+        public Node(int data) { this.value = data; }
+    }
+
+    /** 方法一：全链入栈，空间 O(N) */
+    public static boolean isPalindrome1(Node head) {
+        // 1) 空或单节点一定是回文
+        if (head == null || head.next == null) return true;
+        // 2) 遍历链表，所有节点压入栈
+        Stack<Node> stack = new Stack<>();
+        Node cur = head;
+        while (cur != null) {
+            stack.push(cur);
+            cur = cur.next;
+        }
+        // 3) 再次从头遍历，每次弹栈比较值
+        while (head != null) {
+            if (head.value != stack.pop().value) {
+                return false;
+            }
+            head = head.next;
+        }
+        return true;
+    }
+
+    /** 方法二：后半链入栈，空间 O(N/2) */
+    public static boolean isPalindrome2(Node head) {
+        if (head == null || head.next == null) {
+            return true;
+        }
+        // 1) 用快慢指针找到中点（慢指针最终指向左中点）
+        Node slow = head.next;
+        Node fast = head;
+        while (fast.next != null && fast.next.next != null) {
+            slow = slow.next;
+            fast = fast.next.next;
+        }
+        // 2) slow 开始的后半段入栈
+        Stack<Node> stack = new Stack<>();
+        while (slow != null) {
+            stack.push(slow);
+            slow = slow.next;
+        }
+        // 3) 从头与弹栈节点逐一比较
+        while (!stack.isEmpty()) {
+            if (head.value != stack.pop().value) {
+                return false;
+            }
+            head = head.next;
+        }
+        return true;
+    }
+
+    /** 方法三：原地反转后半段，空间 O(1) */
+    public static boolean isPalindrome3(Node head) {
+        if (head == null || head.next == null) {
+            return true;
+        }
+        // 1) 找到中点 n1（左中点），n2 用于走到末尾
+        Node n1 = head, n2 = head;
+        while (n2.next != null && n2.next.next != null) {
+            n1 = n1.next;
+            n2 = n2.next.next;
+        }
+        // 2) 将后半段反转
+        n2 = n1.next;      // n2 指向后半段首节点
+        n1.next = null;    // 切断前半段
+        Node n3 = null;
+        while (n2 != null) {
+            n3 = n2.next;      // 暂存下一个
+            n2.next = n1;      // 反转指针
+            n1 = n2;           // n1 上移
+            n2 = n3;           // n2 上移
+        }
+        // 3) n1 此时指向尾节点，n3=尾节点；从两端开始比较
+        n3 = n1;       // 保存尾节点
+        n2 = head;     // 前半段头
+        boolean res = true;
+        while (n1 != null && n2 != null) {
+            if (n1.value != n2.value) {
+                res = false;
+                break;
+            }
+            n1 = n1.next;  // 向中点走
+            n2 = n2.next;
+        }
+        // 4) 再次反转恢复链表
+        n1 = n3.next;  // n3.next 是原中点下一个
+        n3.next = null;
+        while (n1 != null) {
+            n2 = n1.next;
+            n1.next = n3;
+            n3 = n1;
+            n1 = n2;
+        }
+        return res;
+    }
+
+    // 打印链表辅助
+    public static void printLinkedList(Node node) {
+        System.out.print("Linked List: ");
+        while (node != null) {
+            System.out.print(node.value + " ");
+            node = node.next;
+        }
+        System.out.println();
+    }
+
+    // 测试主函数
+    public static void main(String[] args) {
+        // 多组测试覆盖空链表、单节点、
+        // 偶数/奇数长度、回文/非回文等
+        Node head = null;
+        printLinkedList(head);
+        System.out.println(isPalindrome1(head) + " | "
+                         + isPalindrome2(head) + " | "
+                         + isPalindrome3(head));
+        System.out.println("=========================");
+
+        head = new Node(1);
+        printLinkedList(head);
+        System.out.println(isPalindrome1(head) + " | "
+                         + isPalindrome2(head) + " | "
+                         + isPalindrome3(head));
+        System.out.println("=========================");
+
+        head = new Node(1);
+        head.next = new Node(2);
+        printLinkedList(head);
+        System.out.println(isPalindrome1(head) + " | "
+                         + isPalindrome2(head) + " | "
+                         + isPalindrome3(head));
+        System.out.println("=========================");
+        
+        // …（省略其余测试的重复构造与打印）…
+    }
+
+}
+```
+
+---
+
+## 6. 容易理解的示例
+
+以链表 `1 → 2 → 3 → 2 → 1` 为例：
+
+1. **原地反转法**（方法三）：
+
+   * 找到中点 `3`，切断后半段 `2→1`；
+   * 反转后半段：`1→2`；
+   * 前后两段对比：`1 vs 1, 2 vs 2, 3 vs 3`；
+   * 恢复后半段，链表复原。
+2. 最终返回 `true`，并且链表结构不变。
+
+---
+
+## 7. 可解决的经典题目
+
+* **LeetCode 234. 回文链表**
+* **面试常见题**：链表中点、链表反转、栈与链表结合
+* **扩展**：判断回文串、回文数组等结构上的同构问题
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **三种方法对比**：
+
+   ```
+   M1 全入栈 → 空间 O(N)
+   M2 半入栈 → 空间 O(N/2)
+   M3 原地反转 → 空间 O(1)
+   ```
+2. **原地反转套路**：“断—反—合—恢复”
+3. **快慢指针找中点**：`slow.next!=null && slow.next.next!=null`
+4. **栈用法**：后进先出，天然倒序辅助比较
+5. **恢复链表**：反转两次链表可归位
+
+---
+
+## 9. 严格按照原始代码实现
+
+以上所有分析、示例与记忆方法，均 **严格基于** 你提供的 `class09.Code02_IsPalindromeList` 实现，未作任何变体。如需对某行逻辑或细节进一步探讨，请随时告诉我！
