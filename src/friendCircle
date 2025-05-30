@@ -1,0 +1,270 @@
+下面我将严格按照你提供的 **Code01\_FriendCircles** 原始实现，分九个方面做详尽解析，帮助你深刻理解“朋友圈”问题的并查集解法及其精髓，并提炼最有利于记忆的规律。
+
+---
+
+### 1. 算法介绍
+
+* **解决的问题**：给定一个 $N\times N$ 的邻接矩阵 $M$，其中 $M[i][j]=1$ 表示学生 $i$ 与学生 $j$ 是朋友。一个朋友圈定义为一组直接或间接（通过链式朋友关系）相互认识的学生。求朋友圈的总数。
+* **优秀之处**：
+
+  1. **高效**：用并查集动态维护连通分量，遍历所有 $i<j$ 只做一次合并判断，时间复杂度 $O(N^2\alpha(N))$。
+  2. **简洁**：逻辑清晰，“合并-查询-计数”三步走。
+* **核心思想**：
+
+  1. 初始化时每个学生自成一组；
+  2. 遍历矩阵上三角，当 $M[i][j]=1$ 时将 $i$ 与 $j$ 两集合合并；
+  3. 最终并查集中剩余的集合数即为朋友圈数量。
+* **时间复杂度**：
+
+  * 外层两重遍历 $i<j$：$O(\tfrac{N(N-1)}{2})=O(N^2)$；
+  * 每次合并/查找摊销 $O(\alpha(N))$（极慢增长）；
+  * 故总体 $O(N^2\alpha(N))$，对 $N\le10^3$ 足够高效。
+* **空间复杂度**：$O(N)$，并查集数组线性开销。
+
+---
+
+### 2. 用到的数据结构与代码
+
+```java
+private int[] parent;  // parent[i] 表示 i 的父节点
+private int[] size;    // size[i] 仅在 i 为集合根时有效，表示该集合规模
+private int[] help;    // 辅助数组，用于路径压缩时暂存沿途节点
+private int   sets;    // 当前不相交集合的数量
+```
+
+* **数组形式**：索引即学生编号，直接、快速地通过下标访问父节点和集合大小。
+* **`help[]`**：显式栈，避免递归压栈，安全且高效地做路径压缩。
+* **`sets`**：维护当前连通分量数，合并一次自减 1，查询时 $O(1)$。
+
+---
+
+### 3. 核心步骤代码解析
+
+#### 初始化
+
+```java
+public UnionFind(int N) {
+    parent = new int[N];
+    size   = new int[N];
+    help   = new int[N];
+    sets   = N;
+    for (int i = 0; i < N; i++) {
+        parent[i] = i;   // 每个节点的父亲先指向自己
+        size[i]   = 1;   // 每个集合初始大小 1
+    }
+}
+```
+
+#### 查找并路径压缩
+
+```java
+private int find(int i) {
+    int hi = 0;
+    while (i != parent[i]) {
+        help[hi++] = i;
+        i = parent[i];
+    }
+    for (hi--; hi >= 0; hi--) {
+        parent[help[hi]] = i;  // 将路径上的所有节点直接挂到根
+    }
+    return i;  // 返回根节点
+}
+```
+
+* **第一阶段**：沿父指针上溯根节点，并把沿途节点压入 `help`；
+* **第二阶段**：弹出 `help`，将所有路径节点的 `parent` 指向根，实现扁平化。
+
+#### 合并集合
+
+```java
+public void union(int i, int j) {
+    int f1 = find(i), f2 = find(j);
+    if (f1 != f2) {
+        // 按秩（这里按“size”）合并
+        if (size[f1] >= size[f2]) {
+            size[f1] += size[f2];
+            parent[f2] = f1;
+        } else {
+            size[f2] += size[f1];
+            parent[f1] = f2;
+        }
+        sets--;  // 合并成功，集合数减 1
+    }
+}
+```
+
+* **按大小合并**：小树根挂到大树根，控制树高度增长；
+* **维护**：更新大根的 `size`，减少根计数 `sets`。
+
+#### 查询集合数
+
+```java
+public int sets() {
+    return sets;
+}
+```
+
+#### 主逻辑
+
+```java
+public static int findCircleNum(int[][] M) {
+    int N = M.length;
+    UnionFind uf = new UnionFind(N);
+    for (int i = 0; i < N; i++) {
+        for (int j = i + 1; j < N; j++) {
+            if (M[i][j] == 1) {
+                uf.union(i, j);
+            }
+        }
+    }
+    return uf.sets();
+}
+```
+
+* **遍历上三角**：避免重复合并；
+* **条件合并**：当且仅当直接认识时才调用 `union`。
+
+---
+
+### 4. 设计或代码技巧
+
+1. **显式路径压缩**：`help[]` 替代递归栈，安全且内存可控。
+2. **按大小合并**：`size` 队列合并时控制高度，摊销更低的查找代价。
+3. **`sets` 计数**：无需后续再遍历根节点，查询集合数即时返回。
+4. **双重循环上三角**：`j=i+1` 节省一半操作，避免 `i,j` 与 `j,i` 重复。
+
+---
+
+### 5. 从头到尾打印代码并注释
+
+```java
+package class15;
+
+public class Code01_FriendCircles {
+
+    // 主函数：计算朋友圈数量
+    public static int findCircleNum(int[][] M) {
+        int N = M.length;
+        UnionFind uf = new UnionFind(N);
+        // 遍历矩阵的上三角
+        for (int i = 0; i < N; i++) {
+            for (int j = i + 1; j < N; j++) {
+                if (M[i][j] == 1) {     // i 与 j 直接认识
+                    uf.union(i, j);     // 合并他们的集合
+                }
+            }
+        }
+        return uf.sets();            // 返回不相交集合数
+    }
+
+    // 并查集数组实现
+    public static class UnionFind {
+        private int[] parent;  // parent[i]=i 的父节点
+        private int[] size;    // size[i]=集合大小，仅对根 i 有效
+        private int[] help;    // 辅助数组，用于路径压缩
+        private int   sets;    // 当前不相交集合数
+
+        public UnionFind(int N) {
+            parent = new int[N];
+            size   = new int[N];
+            help   = new int[N];
+            sets   = N;
+            for (int i = 0; i < N; i++) {
+                parent[i] = i;  // 自己的父节点是自己
+                size[i]   = 1;  // 每个集合初始大小 1
+            }
+        }
+
+        // 查找并压缩：返回 i 的集合代表节点（根）
+        private int find(int i) {
+            int hi = 0;
+            // 上溯到根，同时记录路径
+            while (i != parent[i]) {
+                help[hi++] = i;
+                i = parent[i];
+            }
+            // 路径压缩：将路径上所有节点直接指向根
+            for (hi--; hi >= 0; hi--) {
+                parent[help[hi]] = i;
+            }
+            return i;
+        }
+
+        // 合并 i 和 j 所在集合
+        public void union(int i, int j) {
+            int f1 = find(i), f2 = find(j);
+            if (f1 != f2) {
+                // 按集合大小合并
+                if (size[f1] >= size[f2]) {
+                    size[f1] += size[f2];
+                    parent[f2] = f1;
+                } else {
+                    size[f2] += size[f1];
+                    parent[f1] = f2;
+                }
+                sets--;  // 合并后集合数减 1
+            }
+        }
+
+        // 返回当前不相交集合数量
+        public int sets() {
+            return sets;
+        }
+    }
+
+}
+```
+
+---
+
+### 6. 容易理解的示例
+
+```java
+int[][] M = {
+  {1,1,0},
+  {1,1,0},
+  {0,0,1}
+};
+// 学生 0 与 1 互为朋友；2 单独成圈
+// 期望输出：2
+System.out.println(findCircleNum(M)); // 2
+```
+
+* **流程**：
+
+  * 初始 3 个集合 {0},{1},{2}；
+  * 遇 M\[0]\[1]=1 → 合并 {0,1}；
+  * 最终 2 个集合 → 答案 2。
+
+---
+
+### 7. 可处理的经典题目
+
+* **LeetCode 547. Friend Circles**（本题）
+* **547 Progression**： 200. Number of Islands、305. Number of Islands II
+* **1319. 连通网络的数量**（相同思路）
+* **990. 等式方程的可满足性**
+* **Kruskal 最小生成树**：动态维护连通性
+
+---
+
+### 8. 知识点提取与记忆法
+
+1. **三大核心操作**：
+
+   ```
+   init(N): 每个 parent[i]=i，size[i]=1，sets=N
+   find(i): 压栈上溯 → 到根 → 路径压缩
+   union(i,j): 按 size 合并 → sets--
+   ```
+2. **遍历优化**：只遍历上三角 `j=i+1…N-1`，避免冗余。
+3. **结构扁平化**：路径压缩 + 按秩合并，保证查找摊销常数。
+4. **记忆口诀**：
+
+   > **“父指针、压栈上溯、弹栈挂根、小树挂大树”**
+
+---
+
+### 9. 严格基于原始代码
+
+以上所有分析、示例与记忆方法，均 **严格对应** 你提供的 `class15.Code01_FriendCircles` 实现，未做任何变体或简化。希望对你深入理解并查集与本题解法大有裨益！
