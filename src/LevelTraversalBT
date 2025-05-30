@@ -1,0 +1,200 @@
+下面我将严格按照你提供的 **class11.Code01\_LevelTraversalBT** 实现，分九个部分深入解析二叉树的层次遍历（BFS），帮助你全面理解其本质、技巧，并提炼最有利于记忆的规律。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**：按树的层级，从上到下、从左到右依次访问二叉树所有节点。
+* **优秀之处**：
+
+  * 可以一次性访问到“同一深度”所有节点，适合最短路径、最小深度等问题；
+  * 与深度优先（前、中、后序）互补，覆盖不同场景需求。
+* **核心思想**：借助 **队列**（Queue）的 FIFO 特性，将当前节点出队访问，并把它的左右子节点依次入队，直至队空。
+* **时间复杂度**：O(N)，N 为节点数，每个节点仅入队和出队一次。
+* **空间复杂度**：O(W)，W 为树的最大宽度（最坏 O(N)）。
+
+---
+
+## 2. 用到的数据结构及代码
+
+```java
+public static class Node {
+    public int value;
+    public Node left, right;
+    public Node(int v) { value = v; }
+}
+
+Queue<Node> queue = new LinkedList<>();
+```
+
+* **Node**：存储整型 `value` 与指向左右子节点的引用；
+* **Queue**：维护待访问节点的顺序，实现层次遍历的“先进先出”特性。
+* **为什么这样用**：
+
+  * `LinkedList` 实现的 `Queue` 支持高效的 `add`（尾入）与 `poll`（头出）；
+  * 通过入队子节点保证了访问顺序的层次性。
+
+---
+
+## 3. 核心步骤代码解析
+
+```java
+if (head == null) return;
+queue.add(head);                     // 1) 根节点入队
+while (!queue.isEmpty()) {           // 2) 队空为止循环
+    Node cur = queue.poll();         //    2.1) 出队当前节点
+    System.out.println(cur.value);   //    2.2) 访问它
+    if (cur.left  != null) queue.add(cur.left);    //    2.3) 左入队
+    if (cur.right != null) queue.add(cur.right);   //    2.4) 右入队
+}
+```
+
+1. **空树检查**：若 `head==null`，直接返回，不输出。
+2. **初始化**：将根节点加入队列。
+3. **主循环**：只要队列非空，就取出一个节点：
+
+   * **访问**：输出节点值；
+   * **扩展**：依次将其左右子节点（若存在）入队；
+4. **结束**：当所有节点都被出队并访问完毕，队列为空，遍历结束。
+
+---
+
+## 4. 设计或逻辑/代码技巧
+
+1. **null 检查**：先 `if (head==null)`，简化后续逻辑，无需额外判断根空。
+2. **入队顺序**：先左后右，保证同层中“左→右”访问顺序。
+3. **单队实现**：无需额外记录层界限，直接线性出入队即可；
+4. **输出方式**：可根据需求换成收集到列表或打印行分隔不同层。
+
+---
+
+## 5. 全代码及详尽注释
+
+```java
+package class11;
+
+import java.util.LinkedList;
+import java.util.Queue;
+
+public class Code01_LevelTraversalBT {
+
+    // 二叉树节点定义
+    public static class Node {
+        public int value;
+        public Node left, right;
+        public Node(int v) { value = v; }
+    }
+
+    // 层次遍历入口：按层从上到下、从左到右输出节点值
+    public static void level(Node head) {
+        // 1) 空树直接返回
+        if (head == null) {
+            return;
+        }
+        // 2) 用队列维护“待访问节点”
+        Queue<Node> queue = new LinkedList<>();
+        // 3) 将根节点加入队列
+        queue.add(head);
+        // 4) 只要队列非空，循环访问
+        while (!queue.isEmpty()) {
+            // 4.1) 取出队首节点
+            Node cur = queue.poll();
+            // 4.2) “访问”当前节点（此处打印值）
+            System.out.println(cur.value);
+            // 4.3) 左子节点（若存在）入队
+            if (cur.left != null) {
+                queue.add(cur.left);
+            }
+            // 4.4) 右子节点（若存在）入队
+            if (cur.right != null) {
+                queue.add(cur.right);
+            }
+        }
+    }
+
+    // 测试示例：构造一棵满二叉树并遍历
+    public static void main(String[] args) {
+        //    1
+        //  2   3
+        // 4 5 6 7
+        Node head = new Node(1);
+        head.left  = new Node(2);
+        head.right = new Node(3);
+        head.left.left  = new Node(4);
+        head.left.right = new Node(5);
+        head.right.left  = new Node(6);
+        head.right.right = new Node(7);
+
+        level(head);
+        System.out.println("========");
+    }
+}
+```
+
+---
+
+## 6. 举例说明
+
+对于上述示例树，访问顺序：
+
+```
+队列状态（→为入队/出队）：
+[1]
+出队1→打印1→入2,3→[2,3]
+出队2→打印2→入4,5→[3,4,5]
+出队3→打印3→入6,7→[4,5,6,7]
+出队4→打印4→无子  →[5,6,7]
+出队5→打印5→无子  →[6,7]
+出队6→打印6→无子  →[7]
+出队7→打印7→无子  →[] →结束
+```
+
+输出依次是：
+
+```
+1
+2
+3
+4
+5
+6
+7
+```
+
+---
+
+## 7. 可处理的经典题目
+
+* **求二叉树的最小深度**（第一层无左右子时依赖层序遍历）
+* **判断完全二叉树**（层序遍历中遇空节点后不能再遇非空）
+* **二叉树按层分行输出**（可在出队时记录层号或用层尾标记）
+* **二叉树的“之”字形”层序遍历**（奇偶层入栈/队列顺序不同）
+* **按层求平均值、最大值或汇总**（统计每层节点值）。
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **BFS 三要素**：
+
+   ```
+   1) 队列
+   2) 根入队
+   3) 出队→访问→子节点入队
+   ```
+2. **访问顺序**：**层**→左→右。
+3. **复杂度记忆**：
+
+   * 时间 O(N)：每个节点入/出队各一次；
+   * 空间 O(W)：W 为树最大宽度。
+4. **应用场景**：任何“最短路径”、“层级统计”问题，皆可联想到层序遍历。
+5. **变体技巧**：
+
+   * 记录“层尾”节点或在队列中添加 `null` 分隔层；
+   * 用双端队列实现之字形遍历。
+
+---
+
+## 9. 严格按照原始代码
+
+以上所有分析、示例与记忆方法，均 **严格基于** 你提供的 **class11.Code01\_LevelTraversalBT** 原始实现，未作任何改动或引入其它实现。如需更深入探讨某行或扩展不同层序变体，随时告诉我！
