@@ -1,0 +1,235 @@
+下面我将严格按照之前约定的九个步骤，对你提供的 **Code04\_Kruskal**（基于并查集的 Kruskal 最小生成树）原始代码做深度解析，帮助你彻底理解算法本质、数据结构与技巧，并提炼最有利于记忆的要点。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  给定一个**无向连通加权图**，求其最小生成树（MST），即在保证连通的前提下，选取一棵生成树使得所有选边的权重之和最小。
+* **优秀之处**
+
+  * **贪心安全**：Kruskal 算法按照边权从小到大考虑，若当前边两端不在同一集合则一定要选，这一贪心策略能保证全局最优；
+  * **通用性强**：对稀疏图尤其高效，时间 $O(E\log E)$；
+  * **实现简洁**：借助并查集快速判断“是否形成环”和合并子树。
+* **核心思想**
+
+  1. **排序**：将所有边按权重从小到大排序；
+  2. **遍历**：依次取出最小权边 $(u,v)$，若 $u$ 与 $v$ 不在同一集合（即选它不会产生环），就将该边加入结果，并将两节点集合合并；
+  3. **终止**：当结果边数达到 $V-1$ 或边用完即结束。
+* **时间复杂度**
+
+  * 边排序：$O(E\log E)$；
+  * 并查集操作：摊销几乎常数；
+  * 总计：$O(E\log E + V\alpha(V))\approx O(E\log E)$。
+
+---
+
+## 2. 用到的数据结构与关键代码
+
+```java
+// 并查集
+HashMap<Node,Node> fatherMap;  // 每个节点指向的父节点
+HashMap<Node,Integer> sizeMap; // 每个根节点对应的子集合大小
+
+// 边排序
+PriorityQueue<Edge> priorityQueue;  // 小根堆，按 Edge.weight 升序
+
+// 输出结果
+Set<Edge> result;  // 存放选中的最小生成树边
+```
+
+* **`fatherMap`+`sizeMap`**：支持泛型 `Node` 对象的并查集，实现路径压缩与按大小合并；
+* **小根堆**：快速提供当前最小权边；
+* **`result`**：集合存边，自动去重且可快速判断包含关系。
+
+---
+
+## 3. 核心步骤代码解析
+
+```java
+public static Set<Edge> kruskalMST(Graph graph) {
+    // 1) 并查集初始化
+    UnionFind uf = new UnionFind();
+    uf.makeSets(graph.nodes.values());
+    // 2) 将所有边加入小根堆
+    PriorityQueue<Edge> pq = new PriorityQueue<>(new EdgeComparator());
+    for (Edge e : graph.edges) {
+        pq.add(e);
+    }
+    Set<Edge> result = new HashSet<>();
+    // 3) 贪心取边
+    while (!pq.isEmpty()) {
+        Edge e = pq.poll(); // 取最小权边
+        // 若两端不在同一集合，就选它并合并
+        if (!uf.isSameSet(e.from, e.to)) {
+            result.add(e);
+            uf.union(e.from, e.to);
+        }
+    }
+    return result;
+}
+```
+
+* **步骤 1**：对图中所有节点**各自成集**，初始时没有任何连接；
+* **步骤 2**：把边集中的每条边插入优先队列，按权重排序；
+* **步骤 3**：循环弹出当前最小权边，若它的两端所属集合不同，则它属于 MST，将它加入结果并合并集合；否则跳过（避免成环）；
+* **结束条件**：队列空或结果边数达到 $V-1$。
+
+---
+
+## 4. 设计或代码技巧
+
+1. **`makeSets(Collection<Node>)`**：一次性对所有节点初始化并查集，无需外部循环多次调用；
+2. **路径压缩 + 按大小合并**：并查集内部用栈收集路径并压平，同时将小集合根挂到大集合根下，保证查询近乎 O(1)；
+3. **EdgeComparator**：独立可重用的比较器，按 `weight` 排序；
+4. **取边即出队**：每次只取最小边，无需二次排序或线性扫描。
+
+---
+
+## 5. 全代码及详尽注释
+
+```java
+package class16;
+
+import java.util.*;
+
+/** Kruskal 最小生成树实现（仅限无向图） */
+public class Code04_Kruskal {
+
+  /** 并查集内部类，用于判断环与合并 */
+  public static class UnionFind {
+    private HashMap<Node, Node> fatherMap;
+    private HashMap<Node, Integer> sizeMap;
+
+    public UnionFind() {
+      fatherMap = new HashMap<>();
+      sizeMap   = new HashMap<>();
+    }
+
+    /** 初始化：每个节点自成一个集合 */
+    public void makeSets(Collection<Node> nodes) {
+      fatherMap.clear();
+      sizeMap.clear();
+      for (Node n : nodes) {
+        fatherMap.put(n, n);
+        sizeMap.put(n, 1);
+      }
+    }
+
+    /** 查找根并路径压缩 */
+    private Node findFather(Node n) {
+      Stack<Node> path = new Stack<>();
+      while (n != fatherMap.get(n)) {
+        path.push(n);
+        n = fatherMap.get(n);
+      }
+      // 路径压缩：将沿路节点直接挂到根
+      while (!path.isEmpty()) {
+        fatherMap.put(path.pop(), n);
+      }
+      return n;
+    }
+
+    /** 判断 a、b 是否在同一集合 */
+    public boolean isSameSet(Node a, Node b) {
+      return findFather(a) == findFather(b);
+    }
+
+    /** 合并 a、b 所在集合（按大小） */
+    public void union(Node a, Node b) {
+      if (a == null || b == null) return;
+      Node fa = findFather(a), fb = findFather(b);
+      if (fa != fb) {
+        int sa = sizeMap.get(fa), sb = sizeMap.get(fb);
+        if (sa <= sb) {
+          fatherMap.put(fa, fb);
+          sizeMap.put(fb, sa + sb);
+          sizeMap.remove(fa);
+        } else {
+          fatherMap.put(fb, fa);
+          sizeMap.put(fa, sa + sb);
+          sizeMap.remove(fb);
+        }
+      }
+    }
+  }
+
+  /** 边权比较器：升序 */
+  public static class EdgeComparator implements Comparator<Edge> {
+    @Override
+    public int compare(Edge e1, Edge e2) {
+      return e1.weight - e2.weight;
+    }
+  }
+
+  /** Kruskal 主函数 */
+  public static Set<Edge> kruskalMST(Graph graph) {
+    // 1) 并查集对所有节点分组
+    UnionFind uf = new UnionFind();
+    uf.makeSets(graph.nodes.values());
+    // 2) 小根堆按边权排序
+    PriorityQueue<Edge> pq = new PriorityQueue<>(new EdgeComparator());
+    for (Edge e : graph.edges) {
+      pq.add(e);
+    }
+    // 3) 选边，跳过成环的
+    Set<Edge> result = new HashSet<>();
+    while (!pq.isEmpty()) {
+      Edge e = pq.poll();
+      if (!uf.isSameSet(e.from, e.to)) {
+        result.add(e);
+        uf.union(e.from, e.to);
+      }
+    }
+    return result;
+  }
+}
+```
+
+---
+
+## 6. 简单易懂的示例
+
+```java
+// 节点 1,2,3,4,5；边：(1–2,1),(1–3,2),(2–3,3),(2–4,4),(3–5,5)
+// Kruskal 输出 MST 边集应为：(1–2),(1–3),(2–4),(3–5)
+Graph g = GraphGenerator.createGraph(new int[][] {
+  {1,1,2},{2,1,3},{3,2,3},{4,2,4},{5,3,5}
+});
+Set<Edge> mst = Code04_Kruskal.kruskalMST(g);
+int sum = mst.stream().mapToInt(e->e.weight).sum(); // 应为1+2+4+5=12
+```
+
+---
+
+## 7. 可解决的经典题目
+
+* **最小生成树**：Kruskal、Prim、Borůvka
+* **网络设计**：电网、路网最优化
+* **图的可靠性**：最小割与最大流的对偶
+* **簇聚类**：单链接聚类可视为最小生成树的一部分
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **三步走**：
+
+   ```
+   makeSets(nodes)
+   sortEdgesAsc → priorityQueue
+   for each edge: if !sameSet: pick + union
+   ```
+2. **并查集口诀**：
+
+   > **查根压扁** + **小挂大**
+3. **优先队列口诀**：
+
+   > “最小权先出队”
+4. **复杂度记忆**：$O(E\log E + Vα(V))\approx O(E\log E)$
+
+---
+
+## 9. 严格基于原始代码
+
+以上所有分析、示例与记忆方法，均 **严格对应** 你提供的 `class16.Code04_Kruskal` 原始实现，未作任何更改或简化。希望对你深刻掌握 Kruskal 算法大有裨益！
