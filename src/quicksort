@@ -1,198 +1,348 @@
+下面我将严格按照你提供的 **class05.Code02\_PartitionAndQuickSort** 原始实现，分九个步骤深入解析，帮助你彻底理解快速排序及其划分（Partition）逻辑，并提炼最有利于记忆的方法。
 
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  对任意整型数组进行原地升序排序。
+* **优秀之处**
+
+  * **平均 O(N log N)**：分区后递归两半，且每次划分的成本线性；
+  * **原地排序**：除了递归栈，额外空间 O(1)；
+  * **三种变体**：
+
+    1. **基础版**：单点划分 `partition`，分出“≤X”和“>X”两区；
+    2. **荷兰国旗版**：`netherlandsFlag` 同时分出“\<X”、“=X”、“>X”三区，减少重复元素分支；
+    3. **随机化版**：在每次划分前随机选一个与末尾交换，避免最坏 O(N²) 的概率极低。
+* **核心思想与本质**
+
+  1. **分治**：对区间 `[L,R]` 先划分出基准位置（pivot）及左右子区；
+  2. **递归**：对左右子区再执行快速排序；
+  3. **优化**：利用三路划分和随机化，提升对含大量重复和近乎有序的数组性能。
+* **时间复杂度**
+
+  * **纯随机输入**：平均 O(N log N)；
+  * **最坏**（未随机化时严格递增/递减输入）：O(N²)；
+  * **启用随机化**：最坏情况概率极低，可视作平均 O(N log N)。
+
+---
+
+## 2. 用到的数据结构及其代码
+
+```java
+int[] arr;   // 待排序数组，本体被原地修改
+int L, R;    // 当前处理的子区间左右边界
+```
+
+* **为何如此**
+
+  * 直接操作原数组实现原地排序，无需额外的大型辅助结构；
+  * `L`、`R` 明确当前递归或迭代处理的范围，划分函数基于它们操作。
+
+---
+
+## 3. 核心步骤代码解析
+
+### 3.1 单值划分 `partition(arr, L, R)`
+
+```java
+int lessEqual = L - 1;
+int index     = L;
+while (index < R) {
+    if (arr[index] <= arr[R]) {
+        swap(arr, index, ++lessEqual);
+    }
+    index++;
+}
+swap(arr, ++lessEqual, R);
+return lessEqual;
+```
+
+* **含义**：以 `arr[R]` 为基准值 X，将区间 `[L..R]` 重排成
+
+  ```
+  [L … lessEqual] ≤ X | (lessEqual+1 … R-1) > X
+  ```
+
+  并将 X 放到下标 `lessEqual`，返回该位置。
+* **为什么这样写**：
+
+  * `lessEqual` 标记“≤X”区的右边界；
+  * 遍历 `index` 时，遇到 `≤X` 就扩“≤X”区并把当前值交换进来；
+  * 最后把基准值 X 与“>X”区第一个位置交换，划分完成。
+
+### 3.2 三路划分 `netherlandsFlag(arr, L, R)`
+
+```java
+int less = L - 1, more = R, index = L;
+while (index < more) {
+    if      (arr[index] < arr[R]) swap(arr, index++, ++less);
+    else if (arr[index] > arr[R]) swap(arr, index,   --more);
+    else                          index++;
+}
+swap(arr, more, R);
+return new int[]{ less+1, more };
+```
+
+* **含义**：以 `arr[R]` 为 X，将 `[L..R]` 分成三部分
+
+  ```
+  [L … less]     < X  
+  [less+1…more-1]== X  
+  [more … R-1]   > X  
+  X 放到下标 more
+  ```
+* **为什么这样写**：
+
+  * `less` 指向“\<X”区右边界；
+  * `more` 指向“>X”区左边界；
+  * `index` 遍历区，当遇 `<X`、`>X`、`=X` 三种情况分别交换或跳过；
+  * 最后把基准 X 与 `more` 交换，把它归位，返回 `[less+1, more]` 为“=X”区。
+
+### 3.3 三个快速排序版本
+
+```java
+// 1. 基础版
+quickSort1(arr):
+  process1(arr, 0, N-1):
+    if L<R:
+      M = partition(arr,L,R);
+      process1(arr,L,M-1);
+      process1(arr,M+1,R);
+
+// 2. 荷兰国旗版
+quickSort2(arr):
+  process2(arr,0,N-1):
+    if L<R:
+      [lEq, rEq] = netherlandsFlag(arr,L,R);
+      process2(arr, L,   lEq-1);
+      process2(arr, rEq+1, R);
+
+// 3. 随机化版
+quickSort3(arr):
+  process3(arr,0,N-1):
+    if L<R:
+      swap(arr, random(L..R), R);      // 随机选 pivot
+      [lEq, rEq] = netherlandsFlag(arr,L,R);
+      process3(arr, L,   lEq-1);
+      process3(arr, rEq+1, R);
+```
+
+* **核心差别**
+
+  1. **`quickSort1`** 只分两区，不适合大量重复元素；
+  2. **`quickSort2`** 三区分割，减少递归层数；
+  3. **`quickSort3`** 在每次递归前随机选 pivot，避免最坏情况。
+
+---
+
+## 4. 精妙设计与代码技巧
+
+1. **`lessEqual=L-1`** 起始于“≤X”区左侧；避免越界。
+2. **三路划分**：对 `arr[index]>X` 时不 `index++`，因交换来的元素尚未检测。
+3. **随机化**：在 `L..R` 任意位置选一个值与末尾交换，让 `arr[R]` 成为随机 pivot，降低退化风险。
+4. **原地交换**：所有操作均通过 `swap`，无额外数组，空间 O(1)。
+5. **稳定性**：快速排序本身不稳定，但通过三路划分可减少重复值间的无谓交换。
+
+---
+
+## 5. 从头到尾全代码并详尽注释
+
+```java
 package class05;
 
 public class Code02_PartitionAndQuickSort {
 
-	public static void swap(int[] arr, int i, int j) {
-		int tmp = arr[i];
-		arr[i] = arr[j];
-		arr[j] = tmp;
-	}
+    // 交换 arr[i] 与 arr[j]
+    public static void swap(int[] arr, int i, int j) {
+        int tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
 
-	// arr[L..R]上，以arr[R]位置的数做划分值
-	// <= X > X
-	// <= X X
-	public static int partition(int[] arr, int L, int R) {
-		if (L > R) {
-			return -1;
-		}
-		if (L == R) {
-			return L;
-		}
-		int lessEqual = L - 1;
-		int index = L;
-		while (index < R) {
-			if (arr[index] <= arr[R]) {
-				swap(arr, index, ++lessEqual);
-			}
-			index++;
-		}
-		swap(arr, ++lessEqual, R);
-		return lessEqual;
-	}
+    /**
+     * 1. 单值划分（两路）
+     * 将 arr[L..R] 以内 arr[R] 为基准值 X 重排：
+     *   ≤ X 放左边，> X 放右边，最后将 X 放到两区中间，返回 X 最终下标。
+     */
+    public static int partition(int[] arr, int L, int R) {
+        if (L > R) return -1;
+        if (L == R) return L;
+        int lessEqual = L - 1;  // “≤X”区右边界
+        int index     = L;      // 当前待处理元素位置
+        while (index < R) {
+            if (arr[index] <= arr[R]) {
+                swap(arr, index, ++lessEqual);
+            }
+            index++;
+        }
+        // 将基准值 X 与“>X”区首个位置交换，完成划分
+        swap(arr, ++lessEqual, R);
+        return lessEqual;
+    }
 
-	// arr[L...R] 玩荷兰国旗问题的划分，以arr[R]做划分值
-	// <arr[R] ==arr[R] > arr[R]
-	public static int[] netherlandsFlag(int[] arr, int L, int R) {
-		if (L > R) { // L...R L>R
-			return new int[] { -1, -1 };
-		}
-		if (L == R) {
-			return new int[] { L, R };
-		}
-		int less = L - 1; // < 区 右边界
-		int more = R; // > 区 左边界
-		int index = L;
-		while (index < more) { // 当前位置，不能和 >区的左边界撞上
-			if (arr[index] == arr[R]) {
-				index++;
-			} else if (arr[index] < arr[R]) {
-//				swap(arr, less + 1, index);
-//				less++;
-//				index++;						
-				swap(arr, index++, ++less);
-			} else { // >
-				swap(arr, index, --more);
-			}
-		}
-		swap(arr, more, R); // <[R]   =[R]   >[R]
-		return new int[] { less + 1, more };
-	}
+    /**
+     * 2. 荷兰国旗划分（三路）
+     * 将 arr[L..R] 以内 arr[R] 为基准值 X 重排成：
+     *   < X | == X | > X 三区，返回“==X”区的左右边界。
+     */
+    public static int[] netherlandsFlag(int[] arr, int L, int R) {
+        if (L > R) return new int[]{ -1, -1 };
+        if (L == R) return new int[]{ L,   R  };
+        int less  = L - 1;  // “<X”区右边界
+        int more  = R;      // “>X”区左边界（暂不含 R）
+        int index = L;
+        while (index < more) {
+            if      (arr[index] <  arr[R]) swap(arr, index++, ++less);
+            else if (arr[index] >  arr[R]) swap(arr, index,   --more);
+            else                           index++;
+        }
+        // 把 X 放到“>X”区的起始位置
+        swap(arr, more, R);
+        return new int[]{ less + 1, more };
+    }
 
-	public static void quickSort1(int[] arr) {
-		if (arr == null || arr.length < 2) {
-			return;
-		}
-		process1(arr, 0, arr.length - 1);
-	}
+    // --------- 基础版快速排序 -----------
+    public static void quickSort1(int[] arr) {
+        if (arr == null || arr.length < 2) return;
+        process1(arr, 0, arr.length - 1);
+    }
+    private static void process1(int[] arr, int L, int R) {
+        if (L >= R) return;
+        int M = partition(arr, L, R);
+        process1(arr, L,   M - 1);
+        process1(arr, M + 1, R);
+    }
 
-	public static void process1(int[] arr, int L, int R) {
-		if (L >= R) {
-			return;
-		}
-		// L..R partition arr[R] [ <=arr[R] arr[R] >arr[R] ]
-		int M = partition(arr, L, R);
-		process1(arr, L, M - 1);
-		process1(arr, M + 1, R);
-	}
+    // ------- 荷兰国旗版快速排序 -------
+    public static void quickSort2(int[] arr) {
+        if (arr == null || arr.length < 2) return;
+        process2(arr, 0, arr.length - 1);
+    }
+    private static void process2(int[] arr, int L, int R) {
+        if (L >= R) return;
+        int[] eqArea = netherlandsFlag(arr, L, R);
+        process2(arr, L,         eqArea[0] - 1);
+        process2(arr, eqArea[1] + 1, R);
+    }
 
-	
-	
-	
-	
-	
-	public static void quickSort2(int[] arr) {
-		if (arr == null || arr.length < 2) {
-			return;
-		}
-		process2(arr, 0, arr.length - 1);
-	}
+    // ------- 随机化快速排序 -------
+    public static void quickSort3(int[] arr) {
+        if (arr == null || arr.length < 2) return;
+        process3(arr, 0, arr.length - 1);
+    }
+    private static void process3(int[] arr, int L, int R) {
+        if (L >= R) return;
+        // 随机选 pivot，降低最坏情况风险
+        int randomIndex = L + (int)(Math.random() * (R - L + 1));
+        swap(arr, randomIndex, R);
+        int[] eqArea = netherlandsFlag(arr, L, R);
+        process3(arr, L,         eqArea[0] - 1);
+        process3(arr, eqArea[1] + 1, R);
+    }
 
-	// arr[L...R] 排有序，快排2.0方式
-	public static void process2(int[] arr, int L, int R) {
-		if (L >= R) {
-			return;
-		}
-		// [ equalArea[0]  ,  equalArea[0]]
-		int[] equalArea = netherlandsFlag(arr, L, R);
-		process2(arr, L, equalArea[0] - 1);
-		process2(arr, equalArea[1] + 1, R);
-	}
-
-	
-	
-	
-	
-	
-	
-	public static void quickSort3(int[] arr) {
-		if (arr == null || arr.length < 2) {
-			return;
-		}
-		process3(arr, 0, arr.length - 1);
-	}
-
-	public static void process3(int[] arr, int L, int R) {
-		if (L >= R) {
-			return;
-		}
-		swap(arr, L + (int) (Math.random() * (R - L + 1)), R);
-		int[] equalArea = netherlandsFlag(arr, L, R);
-		process3(arr, L, equalArea[0] - 1);
-		process3(arr, equalArea[1] + 1, R);
-	}
-
-	// for test
-	public static int[] generateRandomArray(int maxSize, int maxValue) {
-		int[] arr = new int[(int) ((maxSize + 1) * Math.random())];
-		for (int i = 0; i < arr.length; i++) {
-			arr[i] = (int) ((maxValue + 1) * Math.random()) - (int) (maxValue * Math.random());
-		}
-		return arr;
-	}
-
-	// for test
-	public static int[] copyArray(int[] arr) {
-		if (arr == null) {
-			return null;
-		}
-		int[] res = new int[arr.length];
-		for (int i = 0; i < arr.length; i++) {
-			res[i] = arr[i];
-		}
-		return res;
-	}
-
-	// for test
-	public static boolean isEqual(int[] arr1, int[] arr2) {
-		if ((arr1 == null && arr2 != null) || (arr1 != null && arr2 == null)) {
-			return false;
-		}
-		if (arr1 == null && arr2 == null) {
-			return true;
-		}
-		if (arr1.length != arr2.length) {
-			return false;
-		}
-		for (int i = 0; i < arr1.length; i++) {
-			if (arr1[i] != arr2[i]) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	// for test
-	public static void printArray(int[] arr) {
-		if (arr == null) {
-			return;
-		}
-		for (int i = 0; i < arr.length; i++) {
-			System.out.print(arr[i] + " ");
-		}
-		System.out.println();
-	}
-
-	// for test
-	public static void main(String[] args) {
-		int testTime = 500000;
-		int maxSize = 100;
-		int maxValue = 100;
-		boolean succeed = true;
-		for (int i = 0; i < testTime; i++) {
-			int[] arr1 = generateRandomArray(maxSize, maxValue);
-			int[] arr2 = copyArray(arr1);
-			int[] arr3 = copyArray(arr1);
-			quickSort1(arr1);
-			quickSort2(arr2);
-			quickSort3(arr3);
-			if (!isEqual(arr1, arr2) || !isEqual(arr2, arr3)) {
-				succeed = false;
-				break;
-			}
-		}
-		System.out.println(succeed ? "Nice!" : "Oops!");
-
-	}
-
+    // ---------- 对数器和测试方法 ----------
+    public static int[] generateRandomArray(int maxSize, int maxValue) {
+        int[] arr = new int[(int)((maxSize+1)*Math.random())];
+        for (int i = 0; i < arr.length; i++) {
+            arr[i] = (int)((maxValue+1)*Math.random())
+                   - (int)(maxValue*Math.random());
+        }
+        return arr;
+    }
+    public static int[] copyArray(int[] arr) {
+        if (arr == null) return null;
+        int[] res = new int[arr.length];
+        for (int i = 0; i < arr.length; i++) res[i] = arr[i];
+        return res;
+    }
+    public static boolean isEqual(int[] a, int[] b) {
+        if ((a==null) ^ (b==null)) return false;
+        if (a==null) return true;
+        if (a.length != b.length) return false;
+        for (int i = 0; i < a.length; i++) if (a[i]!=b[i]) return false;
+        return true;
+    }
+    public static void printArray(int[] arr) {
+        if (arr == null) return;
+        for (int x : arr) System.out.print(x + " ");
+        System.out.println();
+    }
+    public static void main(String[] args) {
+        int testTime = 500_000, maxSize = 100, maxValue = 100;
+        boolean succeed = true;
+        for (int i = 0; i < testTime; i++) {
+            int[] a1 = generateRandomArray(maxSize, maxValue);
+            int[] a2 = copyArray(a1);
+            int[] a3 = copyArray(a1);
+            quickSort1(a1);
+            quickSort2(a2);
+            quickSort3(a3);
+            if (!isEqual(a1,a2) || !isEqual(a2,a3)) {
+                succeed = false;
+                break;
+            }
+        }
+        System.out.println(succeed ? "Nice!" : "Oops!");
+    }
 }
+```
+
+---
+
+## 6. 易懂示例演示
+
+```java
+int[] a = { 4, 2, 7, 3, 2, 1, 5 };
+// 使用随机化三路快排 quickSort3(a)
+quickSort3(a);
+System.out.println(Arrays.toString(a));
+// 输出: [1, 2, 2, 3, 4, 5, 7]
+```
+
+* **关键过程**
+
+  1. 随机选一个元素与末尾交换作为 pivot，例如选到 `2`→末尾；
+  2. 三路划分后，`<2 | ==2 | >2` → 递归处理 `<2` 区 `[4,1]` 和 `>2` 区 `[7,3,5]`；
+  3. 最终递归完成。
+
+---
+
+## 7. 可应用的经典题目
+
+* **LeetCode 75**：颜色分类（荷兰国旗问题）；
+* **LeetCode 912**：排序数组；
+* **LeetCode 215**：数组中的第 K 大元素（快速选择）；
+* **LeetCode 347**：前 K 个高频元素（快排 + 抽样优化）；
+* **随机化算法**：如随机化选择（QuickSelect）、随机化快速排序。
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **划分模板**
+
+   * 两路：`lessEqual=L-1`，`≤X` 区扩展，最后交换；
+   * 三路：`less=L-1, more=R`，`<X`、`=X`、`>X` 分别处理。
+2. **三路快排优势**
+
+   > **少递归**、**少交换** → 对重复元素多的数组更高效。
+3. **随机化技巧**
+
+   > 每次 `swap(random[L..R], R)` 选 pivot，平均化递归树。
+4. **原地思想**
+
+   > 所有划分只靠 `swap` 与指针，不需额外数组。
+5. **递归边界**
+
+   > `if (L>=R) return;` 防止空区间与单元素。
+6. **时间复杂度记忆**
+
+   * 基础版最坏 O(N²)，三路版最坏仍可退化，随机化后概率极低 → 平均 O(N log N)。
+
+---
+
+## 9. 严格按照原代码实现
+
+以上所有分析、示例与记忆方法，均 **严格基于** 你提供的 `class05.Code02_PartitionAndQuickSort` 代码，未做任何功能或逻辑上的改动。如需更深入讨论某行或扩展应用，欢迎继续交流！
