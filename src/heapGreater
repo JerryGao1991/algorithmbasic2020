@@ -1,0 +1,409 @@
+下面我将严格按照你给出的 **HeapGreater\<T>** 原始实现，分 1–9 步做详尽解析。由于内容较多，这里先完成前 1–4 步，接着在后续交互中补齐余下步骤，确保每部分都足够详实。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  实现一个支持以下操作的优先队列（最小/最大堆皆可）：
+
+  1. `push(obj)`：插入元素；
+  2. `peek()`：查看堆顶元素；
+  3. `pop()`：弹出并返回堆顶；
+  4. `remove(obj)`：删除任意一个已在堆中的元素；
+  5. `resign(obj)`：当元素的关键值发生变化后，重新调整其在堆中的位置；
+  6. `contains(obj)`、`size()` 等查询。
+
+* **优秀之处**
+
+  * **支持 O(log N) 的任意元素删除**：通过额外的 `indexMap`（对象到数组下标的映射），定位并删除，远优于线性扫描；
+  * **支持“关键值”动态修改后自适应调整**：`resign(obj)` 调用上浮／下沉即可，常见于 A\*、Dijkstra 等算法的优化；
+  * **泛型 + 外部 Comparator**：任意类型、任意规则的堆结构。
+
+* **核心思想与本质**
+
+  1. **数组+完全二叉树**：同大根堆，实现 `heapInsert` 和 `heapify` 上浮/下沉；
+  2. **下标映射**：`indexMap` 维护对象在数组中的位置，支持快速定位；
+  3. **动态删除与更新**：`remove(obj)`、`resign(obj)` 调用“交换到末尾、调整大小再上浮/下沉”保证堆序。
+
+* **时间复杂度**
+
+  * `push`、`pop`、`resign`：均为 $O(\log N)$；
+  * `remove(obj)`：查 `indexMap` $O(1)$，再一次上浮或下沉 $O(\log N)$；
+  * `peek`、`size`、`contains`：$O(1)$。
+
+---
+
+## 2. 数据结构与相应代码
+
+```java
+private ArrayList<T> heap;            // 底层数组实现完全二叉树
+private HashMap<T, Integer> indexMap; // 对象 → 堆中下标：支持 O(1) 定位
+private int heapSize;                 // 当前堆大小
+private Comparator<? super T> comp;   // 外部传入，决定堆的“优先级”规则
+```
+
+* **`heap`**：支持随机访问与交换，用 `ArrayList` 动态扩容；
+* **`indexMap`**：一旦要删除或调整某个元素，`get(obj)` 则可快速得出其在 `heap` 中的索引；
+* **`comp`**：外部可自定义升序（最小堆）或降序（最大堆），通用性极强。
+
+---
+
+## 3. 核心步骤代码解析
+
+### a) `push(T obj)`
+
+```java
+public void push(T obj) {
+  heap.add(obj);                         // 末尾插入
+  indexMap.put(obj, heapSize);          // 记录其下标
+  heapInsert(heapSize++);               // 上浮调整
+}
+```
+
+1. **末尾插入**：保持完全性；
+2. **记录映射**：便于后续 `remove`/`resign` 直接定位；
+3. **`heapInsert(index)`**：从 `index` 向父节点比较、交换，直到堆序满足。
+
+### b) `heapInsert(int index)`
+
+```java
+private void heapInsert(int index) {
+  while (index > 0 && comp.compare(heap.get(index), 
+             heap.get((index - 1) / 2)) < 0) {
+    swap(index, (index - 1) / 2);
+    index = (index - 1) / 2;
+  }
+}
+```
+
+* 用 `comp.compare(a,b)<0` 判断 “`a` 应该在 `b` 之前”（最小堆），或相反。
+* 反复与父节点比较，交换直至根或父优于当前。
+
+### c) `pop()`
+
+```java
+public T pop() {
+  T ans = heap.get(0);                   // 堆顶
+  swap(0, heapSize - 1);                 // 与末尾交换
+  indexMap.remove(ans);                  // 删除映射
+  heap.remove(--heapSize);               // 删除末尾
+  heapify(0);                            // 从根下沉调整
+  return ans;
+}
+```
+
+1. **取出堆顶**；
+2. **末尾顶根并删掉末尾**；
+3. **`heapify(0)`**：自顶向下，与较优子节点交换直至堆序恢复。
+
+### d) `heapify(int index)`
+
+```java
+private void heapify(int index) {
+  int left = 2*index + 1;
+  while (left < heapSize) {
+    // 选出“更优”（如更小）的孩子索引 best
+    int best = left + 1 < heapSize 
+               && comp.compare(heap.get(left+1), heap.get(left)) < 0
+               ? left + 1 : left;
+    best = comp.compare(heap.get(best), heap.get(index)) < 0
+           ? best : index;
+    if (best == index) break;
+    swap(best, index);
+    index = best;
+    left = 2*index + 1;
+  }
+}
+```
+
+* 每次选出两孩子中“最优”的一方，与父比并可能交换；
+* 迭代直到叶节点或父已“优”。
+
+### e) 任意删除 `remove(T obj)`
+
+```java
+public void remove(T obj) {
+  T replace = heap.get(heapSize - 1);
+  int idx = indexMap.get(obj);
+  indexMap.remove(obj);
+  heap.remove(--heapSize);
+  if (obj != replace) {
+    heap.set(idx, replace);
+    indexMap.put(replace, idx);
+    resign(replace);  // 对新放到 idx 的元素进行上浮/下沉
+  }
+}
+```
+
+1. **用末尾元素顶替被删元素的位置**；
+2. **删除末尾，更新 `heapSize` 和 `indexMap`**；
+3. **`resign(replace)`**：先尝试上浮再下沉（或反之）让新值定位到正确位置。
+
+### f) 关键值动态修改 `resign(T obj)`
+
+```java
+public void resign(T obj) {
+  int idx = indexMap.get(obj);
+  heapInsert(idx);
+  heapify(idx);
+}
+```
+
+* 当 `obj` 的比较关键值（Comparator 相关字段）发生变化后，只需对其在堆中的位置进行“上浮＋下沉”双向调整。
+
+---
+
+## 4. 精妙设计与代码技巧
+
+1. **`indexMap`** 支持任意元素的 O(1) 定位，结合 `ArrayList` 达成 O(log N) 删除/修改，远胜于普通优先队列；
+2. **`resign`**：统一“上浮+下沉”调用，无需判断是变大还是变小，简化使用；
+3. **Comparator 泛型**：外部传入最小堆或最大堆规则可随时切换；
+4. **统一交换逻辑**：`swap(i,j)` 同步更新 `heap` 和 `indexMap`，保证映射一致性。
+
+---
+
+
+
+## 5. 从头到尾打印代码并详尽注释
+
+```java
+package class07;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+
+/**
+ * 支持：插入、查看堆顶、弹堆顶、
+ * 任意删除、关键值变更后重排序等操作的堆结构。
+ */
+public class HeapGreater<T> {
+
+    // 底层用动态数组来存储堆元素
+    private ArrayList<T> heap;
+    // 记录每个元素在 heap 中的下标，支持 O(1) 定位
+    private HashMap<T, Integer> indexMap;
+    // 当前堆中元素个数
+    private int heapSize;
+    // 外部传入的比较器，决定堆的“优先级”顺序
+    private Comparator<? super T> comp;
+
+    /** 构造：传入一个 Comparator 决定最小堆或最大堆 */
+    public HeapGreater(Comparator<? super T> c) {
+        heap = new ArrayList<>();
+        indexMap = new HashMap<>();
+        heapSize = 0;
+        comp = c;
+    }
+
+    /** 是否为空堆 */
+    public boolean isEmpty() {
+        return heapSize == 0;
+    }
+
+    /** 返回堆大小 */
+    public int size() {
+        return heapSize;
+    }
+
+    /** 判断 obj 是否在堆中 */
+    public boolean contains(T obj) {
+        return indexMap.containsKey(obj);
+    }
+
+    /** 查看堆顶元素但不弹出 */
+    public T peek() {
+        return heap.get(0);
+    }
+
+    /** 插入一个新元素到堆 */
+    public void push(T obj) {
+        heap.add(obj);                // 放到数组末尾
+        indexMap.put(obj, heapSize);  // 记录其下标
+        heapInsert(heapSize++);       // 从该位置向上调整
+    }
+
+    /** 弹出并返回堆顶元素 */
+    public T pop() {
+        T ans = heap.get(0);          // 堆顶
+        swap(0, heapSize - 1);        // 与末尾交换
+        indexMap.remove(ans);         // 删除映射
+        heap.remove(--heapSize);      // 删除末尾（之前的堆顶）
+        heapify(0);                   // 从根向下调整
+        return ans;
+    }
+
+    /**
+     * 删除堆中任意一个元素 obj，
+     * 利用末尾元素替换再调整堆序
+     */
+    public void remove(T obj) {
+        T replace = heap.get(heapSize - 1);      // 取末尾元素
+        int index = indexMap.get(obj);           // 要删元素下标
+        indexMap.remove(obj);                    // 移除映射
+        heap.remove(--heapSize);                 // 删末尾
+        if (obj != replace) {
+            // 若被删元素不是末尾，放 replace 到 index
+            heap.set(index, replace);
+            indexMap.put(replace, index);
+            resign(replace);    // 对其做上浮和下沉调整
+        }
+    }
+
+    /** 当堆中某个元素的排序关键值改变后，重新调整它的位置 */
+    public void resign(T obj) {
+        int index = indexMap.get(obj);
+        heapInsert(index);    // 先尝试上浮
+        heapify(index);       // 再尝试下沉
+    }
+
+    /** 返回堆中所有元素（无序） */
+    public List<T> getAllElements() {
+        return new ArrayList<>(heap);
+    }
+
+    /** 从 index 位置向上调整（上浮） */
+    private void heapInsert(int index) {
+        // 只要不是根，且当前比父节点“更优”（comp<0）
+        while (index > 0 
+           && comp.compare(heap.get(index), heap.get((index - 1) / 2)) < 0) {
+            swap(index, (index - 1) / 2);
+            index = (index - 1) / 2;  // 继续向上
+        }
+    }
+
+    /** 从 index 位置向下调整（下沉） */
+    private void heapify(int index) {
+        int left = index * 2 + 1;
+        while (left < heapSize) {
+            // 在左右孩子中选“更优”的一个
+            int best = left + 1 < heapSize
+                && comp.compare(heap.get(left + 1), heap.get(left)) < 0
+                ? left + 1
+                : left;
+            // 再和父节点比较
+            best = comp.compare(heap.get(best), heap.get(index)) < 0
+                ? best
+                : index;
+            if (best == index) {
+                break;  // 父已经是最优，无需下沉
+            }
+            swap(best, index);
+            index = best;
+            left = index * 2 + 1;
+        }
+    }
+
+    /** 交换堆中 i 和 j 两个元素，并同步更新它们在 indexMap 的映射 */
+    private void swap(int i, int j) {
+        T o1 = heap.get(i);
+        T o2 = heap.get(j);
+        heap.set(i, o2);
+        heap.set(j, o1);
+        indexMap.put(o2, i);
+        indexMap.put(o1, j);
+    }
+
+}
+```
+
+---
+
+## 6. 详尽示例
+
+假设我们要构建一个**最小堆**（`comp` 为自然序小于关系）来维护一组动态整数，并演示 `push`、`pop`、`remove`、`resign` 的流程。
+
+```java
+// 创建最小堆
+HeapGreater<Integer> heap = new HeapGreater<>(Integer::compare);
+
+// 1) push 操作
+heap.push(5);
+// heap = [5]
+
+heap.push(3);
+// heapInsert 比较 3 < 5 → swap
+// heap = [3,5]
+
+heap.push(4);
+// 放末尾：[3,5,4]； heapInsert：4 ≥ 3，无 swap
+// heap = [3,5,4]
+
+heap.push(2);
+// 放末尾：[3,5,4,2]； heapInsert：2 < 5 → swap → [3,2,4,5]；2 < 3 → swap → [2,3,4,5]
+// heap = [2,3,4,5]
+
+// 2) pop 操作
+int x = heap.pop(); // x = 2
+// swap 根和末尾 → [5,3,4]; heapify：5 > 3 → swap → [3,5,4]; 5 > 4? swap?左孩子=5右=4→best=4→swap→[3,4,5]
+// 最终 heap = [3,4,5]
+
+// 3) remove 操作：删除元素 4
+heap.remove(4);
+// replace = 5，indexMap(4)=1；heap = [3,5,5]? 先 remove→heap=[3,5]
+// 用 replace(5) 覆盖 index=1 → [3,5]; 调用 resign(5):
+//   heapInsert(1): 5 ≥ 3，不上浮；
+//   heapify(1): 无左孩子，终止。
+// heap = [3,5]
+
+// 4) resign 操作：假设我们直接更改某元素关键值
+// 比如堆顶 3 变为 6（外部修改）：
+heap.resign(3);
+// indexMap(3)=0;
+// heapInsert(0): 无上浮；
+// heapify(0): 左孩子=5, comp(5,6)<0 → best=5 下沉 → swap → [5,6]
+// heap = [5,6]
+```
+
+每一步内部的 `heap` 数组状态与 `indexMap` 映射都被同步维护，保证各种操作后依旧是合法的完全二叉堆。
+
+---
+
+## 7. 可处理的经典题目
+
+1. **Dijkstra / A\***
+
+   * 当某节点距离（关键值）更新后，需对其在优先队列中重新定位，使用 `resign`。
+2. **滑动窗口中位数**
+
+   * 需在窗口滑动时删除任意元素、维护两个堆。
+3. **Top-K 问题**
+
+   * 实时删除/插入，求第 K 小 / 大元素。
+4. **任务调度 / 最小开销爬楼梯**
+
+   * 动态优先级更新场景。
+5. **背包“多准则”优化**
+
+   * 自定义 Comparator，维护多维度最优解集合。
+
+---
+
+## 8. 知识点提取与记忆法
+
+* **结构**：
+
+  * `heap`：数组表示完全二叉树
+  * `indexMap`：对象 → 下标，支持 O(1) 定位
+
+* **操作流程口诀**：
+
+  1. **Push** → `add` 末尾 → `heapInsert` 上浮
+  2. **Pop**  → 换末尾 → `heapify` 下沉
+  3. **Remove(obj)** → 换末尾 → `remove` 末尾 → `resign(replace)`
+
+     * `resign` = `heapInsert` & `heapify`
+
+* **Comparator**：一切“优先级”由 `comp.compare(a,b)<0` 决定
+
+* **复杂度记忆**：
+  所有增删改查均在 $O(\log N)$ 内，定位仅需 $O(1)$。
+
+---
+
+## 9. 严格按照原始代码
+
+以上所有分析、注释、示例与记忆要点，均 **严格对应** 你提供的 `class07.HeapGreater` 完整源码，无任何改动或简化。希望这份极致详尽的解析帮助你彻底掌握这一通用堆结构！
+
