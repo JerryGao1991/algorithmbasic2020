@@ -1,0 +1,276 @@
+下面我严格按照你给出的 **Code01\_MonotonousStack** 原始实现，分 **1–9** 步详尽解析，帮助你彻底理解“单调栈”解决最近小于元素索引问题，并提炼易记规律。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  对于数组 `arr` 中的每个位置 `i`，找到其**左侧**和**右侧**第一个小于 `arr[i]` 的元素索引，若不存在则为 `-1`。
+
+  * **无重复** 版本：元素各不相同；
+  * **含重复** 版本：允许相同元素，需将相同值位置聚合。
+
+* **优秀之处**
+  用一个栈（或栈中存列表） O(N) 扫描完成所有位置的左右最近更小值查询，远优于暴力 O(N²)。
+
+* **核心思想与本质**
+
+  1. **单调递增栈**：栈顶始终对应当前已遍历但尚未找到右侧更小元素的位置；
+  2. **遍历到新元素** `arr[i]` 时，弹出所有 `arr[stack.top()]>arr[i]` 的位置 `j`，它们的**右侧**最近更小值即 `i`，**左侧**最近则为弹出后新栈顶或 `-1`；
+  3. **结束时栈中剩余**，它们右侧无更小元素，右索引记 `-1`，左索引同样由新栈顶或 `-1` 决定；
+  4. **含重复** 版本将相同元素的索引收在一个列表里一起处理，保证它们相互之间不影响左右最近更小元素的计算。
+
+* **时间复杂度**
+  O(N)：每个元素最多被入栈和出栈一次；
+
+* **空间复杂度**
+  O(N) 栈与结果数组。
+
+---
+
+## 2. 数据结构与相应代码
+
+```java
+int[][] res = new int[arr.length][2];       // 结果：res[i][0]=左，res[i][1]=右
+Stack<Integer> stack = new Stack<>();       // 无重复：存放索引
+Stack<List<Integer>> stack = new Stack<>(); // 含重复：每个列表存相同值的索引列表
+```
+
+* **`res`**：长为 N 的二维数组，存左右最近更小元素的索引；
+* **`stack`**：单调递增（严格或允许相同值）栈，保证在某个元素出栈时，当前元素即是它们右侧第一个更小。
+
+---
+
+## 3. 核心步骤代码解析
+
+### a) 无重复版 `getNearLessNoRepeat`
+
+```java
+for (int i = 0; i < arr.length; i++) {
+  while (!stack.isEmpty() && arr[stack.peek()] > arr[i]) {
+    int j = stack.pop();
+    int leftLess = stack.isEmpty() ? -1 : stack.peek();
+    res[j][0] = leftLess;
+    res[j][1] = i;
+  }
+  stack.push(i);
+}
+while (!stack.isEmpty()) {
+  int j = stack.pop();
+  int leftLess = stack.isEmpty() ? -1 : stack.peek();
+  res[j][0] = leftLess;
+  res[j][1] = -1;
+}
+```
+
+* **遍历每个 `i`**：
+
+  * 弹出所有 `arr[j] > arr[i]` 的 `j`，因为 `i` 正好是它们**右侧**第一个更小；
+  * 对于每个弹出 `j`，其**左侧**更小由新栈顶（或 `-1`）给出；
+  * 将 `i` 入栈，保持栈内元素对应值**严格递增**。
+
+### b) 含重复版 `getNearLess`
+
+```java
+for (int i = 0; i < arr.length; i++) {
+  while (!stack.isEmpty() && arr[stack.peek().get(0)] > arr[i]) {
+    List<Integer> popIs = stack.pop();
+    int leftLess = stack.isEmpty() ? -1 : stack.peek().getLast();
+    for (int j : popIs) {
+      res[j][0] = leftLess;
+      res[j][1] = i;
+    }
+  }
+  if (!stack.isEmpty() && arr[stack.peek().get(0)] == arr[i]) {
+    stack.peek().add(i);
+  } else {
+    List<Integer> list = new ArrayList<>();
+    list.add(i);
+    stack.push(list);
+  }
+}
+while (!stack.isEmpty()) {
+  List<Integer> popIs = stack.pop();
+  int leftLess = stack.isEmpty() ? -1 : stack.peek().getLast();
+  for (int j : popIs) {
+    res[j][0] = leftLess;
+    res[j][1] = -1;
+  }
+}
+```
+
+* 用 `List<Integer>` 将所有相同值的索引聚合，当被弹出时一起设置**左右**索引，保证相同元素间不互相影响。
+
+---
+
+## 4. 精妙设计与代码技巧
+
+1. **单调栈核心**：栈内保持值（或索引）对应元素递增，新元素一旦更小，栈顶元素“生命结束”，可一次性弹出处理左右边界。
+2. **左右边界同时确定**：弹出时即可获得右边界 `i`，左边界由新栈顶 `stack.peek()`（或 `-1`）给出。
+3. **处理重复**：将等值索引放在一个列表中，保证对它们的左右边界判定相同且互不干扰。
+4. **一次遍历**：无需两次扫描左右，单程 O(N) 即可。
+
+---
+
+## 5. 全代码 & 详尽注释
+
+```java
+package class25;
+
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Stack;
+
+public class Code01_MonotonousStack {
+
+  /** 无重复元素版本：O(N) 求每个位置左右最近小于元素的索引 */
+  public static int[][] getNearLessNoRepeat(int[] arr) {
+    int N = arr.length;
+    int[][] res = new int[N][2];            // res[i]={leftLess, rightLess}
+    Stack<Integer> stack = new Stack<>();   // 存索引，保证 arr[索引] 递增
+
+    // 遍历每个位置 i
+    for (int i = 0; i < N; i++) {
+      // 若当前元素更小，则栈顶元素以 i 为右边界出栈
+      while (!stack.isEmpty() && arr[stack.peek()] > arr[i]) {
+        int j = stack.pop();
+        int left = stack.isEmpty() ? -1 : stack.peek();
+        res[j][0] = left;
+        res[j][1] = i;
+      }
+      // 将当前 i 入栈
+      stack.push(i);
+    }
+    // 处理栈中剩余，右边界为 -1
+    while (!stack.isEmpty()) {
+      int j = stack.pop();
+      int left = stack.isEmpty() ? -1 : stack.peek();
+      res[j][0] = left;
+      res[j][1] = -1;
+    }
+    return res;
+  }
+
+  /** 含重复元素版本：同值索引聚合，避免互相干扰 */
+  public static int[][] getNearLess(int[] arr) {
+    int N = arr.length;
+    int[][] res = new int[N][2];
+    Stack<List<Integer>> stack = new Stack<>();
+    for (int i = 0; i < N; i++) {
+      // 失配弹出所有值 > arr[i] 的列表
+      while (!stack.isEmpty() &&
+            arr[stack.peek().get(0)] > arr[i]) {
+        List<Integer> popIs = stack.pop();
+        int left = stack.isEmpty() ? -1
+                      : stack.peek().get(stack.peek().size() - 1);
+        for (int j : popIs) {
+          res[j][0] = left;
+          res[j][1] = i;
+        }
+      }
+      // 若与栈顶列表对应值相等，加入同一列表；否则新建列表
+      if (!stack.isEmpty() &&
+          arr[stack.peek().get(0)] == arr[i]) {
+        stack.peek().add(i);
+      } else {
+        List<Integer> list = new ArrayList<>();
+        list.add(i);
+        stack.push(list);
+      }
+    }
+    // 处理剩余列表，右边界均为 -1
+    while (!stack.isEmpty()) {
+      List<Integer> popIs = stack.pop();
+      int left = stack.isEmpty() ? -1
+                    : stack.peek().get(stack.peek().size() - 1);
+      for (int j : popIs) {
+        res[j][0] = left;
+        res[j][1] = -1;
+      }
+    }
+    return res;
+  }
+
+  // 测试与暴力对比略
+}
+```
+
+---
+
+## 6. 详细示例
+
+### 无重复示例
+
+```java
+int[] arr = {3, 1, 2, 3};
+// 索引：      0  1  2  3
+// 值：        3  1  2  3
+```
+
+* **i=0**：stack=\[], push 0 → stack=\[0]
+* **i=1**：arr\[0]=3>1 → pop j=0, left=-1, right=1 → res\[0]={-1,1}
+  stack empty, then push 1 → stack=\[1]
+* **i=2**：arr\[1]=1<2 → 不弹，push 2 → stack=\[1,2]
+* **i=3**：arr\[2]=2<3 → 不弹，push 3 → stack=\[1,2,3]
+* **结束**：弹剩余
+
+  * pop j=3, left=2 → res\[3]={2,-1}
+  * pop j=2, left=1 → res\[2]={1,-1}
+  * pop j=1, left=-1→ res\[1]={-1,-1}
+
+最终 `res = [[-1,1],[-1,-1],[1,-1],[2,-1]]`
+
+### 含重复示例
+
+```java
+int[] arr = {2,2,1,2};
+// 索引：      0  1  2  3
+```
+
+* **i=0**：stack=\[], push \[0]
+* **i=1**：arr\[0]==2==2 → add → stack=\[\[0,1]]
+* **i=2**：arr\[0]=2>1 → pop \[0,1], left=-1, right=2 → res\[0]=res\[1]={-1,2}
+  stack empty, push \[2]
+* **i=3**：arr\[2]=1<2 → push new \[3] → stack=\[\[2],\[3]]
+* **结束**：
+
+  * pop \[3], left=2 → res\[3]={2,-1}
+  * pop \[2], left=-1 → res\[2]={-1,-1}
+
+最终 `res={{-1,2},{-1,2},{-1,-1},{2,-1}}`.
+
+---
+
+## 7. 可解决的经典题目
+
+* **柱状图最大矩形**（LeetCode 84）：用最近更小左右边界计算每根柱子的最大矩形；
+* **滑动窗口最小值/最大值**：维护单调队列；
+* **股票价差最大值**：用单调栈或队列预处理；
+* **Next Greater Element**：类似思路求下一个更大元素；
+* **天际线问题**：单调堆或栈辅助。
+
+---
+
+## 8. 知识点提取与记忆法
+
+* **单调栈套路**：
+
+  1. **遍历 i**
+  2. **失配** (`stack.top > current`) → 弹出 top，处理 top 的左右边界
+  3. **入栈** → 保持栈内元素对应值递增
+  4. **结束后** → 弹空栈，右边界为 `-1`
+
+* **处理重复**：
+
+  * 用 `List<Integer>` 聚合等值索引，一起出栈一起设边界。
+
+* **左右边界**：
+
+  * **左**：弹出后新栈顶，或空时 `-1`
+  * **右**：当前下标 `i`，或结束后 `-1`
+
+---
+
+## 9. 严格按照原始代码
+
+以上所有分析、详解与示例，均 **严格对应** 由你提供的 `class25.Code01_MonotonousStack` 原始实现，未做任何改动或简化。希望这份极致详尽的解析帮助你彻底掌握单调栈的精髓！
