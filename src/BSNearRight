@@ -1,0 +1,217 @@
+下面我严格按照你提供的 **Code05\_BSNearRight** 原始实现，分 **1–9** 步做最详尽解析，帮助你彻底掌握「在有序数组中查找最后一个小于等于给定值的位置」这一二分查找变体。
+
+---
+
+## 1. 算法介绍
+
+* **解决的问题**
+  在升序数组 `arr` 中，找到最后一个满足 `arr[i] ≤ value` 的最右位置索引；若都不满足，则返回 `-1`。
+
+* **优秀之处**
+
+  * **对数效率**：仅需 $O(\log N)$ 时间；
+  * **变体灵活**：仅调整比较与边界更新，就能由“前向”二分演化出多种“边界型”查找；
+  * **代码简洁**：只多了一个 `index` 记录即可完成最右边界定位。
+
+* **核心思想与本质**
+
+  1. 初始化双指针区间 `L = 0, R = arr.length-1`，`index = -1`；
+  2. 当区间非空 (`L ≤ R`) 时计算 `mid`，比较 `arr[mid]` 与 `value`：
+
+     * 若 `arr[mid] ≤ value`，说明从 `L` 到 `mid` 都符合左边界条件，但我们要**最右**，故记录 `index = mid`，并收缩**左端** `L = mid+1`；
+     * 否则 `arr[mid] > value`，收缩右端 `R = mid-1`；
+  3. 循环结束后，`index` 中便是最后一次符合的下标（若无符合则仍为 `-1`）。
+
+* **时间复杂度**
+
+  $$
+    O(\log N)\quad\bigl(\text{每次折半}\bigr).
+  $$
+
+---
+
+## 2. 数据结构与相应代码
+
+```java
+int L = 0;                  // 区间左边界
+int R = arr.length - 1;     // 区间右边界
+int index = -1;             // 记录最右符合的位置
+```
+
+* **数组**：已排序的 `int[] arr`；
+* **三个整型**：`L,R` 用于二分区间收缩，`index` 用于保存“符合”时的 mid。
+
+---
+
+## 3. 核心步骤代码解析
+
+```java
+while (L <= R) {
+  int mid = L + ((R - L) >> 1);
+  if (arr[mid] <= value) {
+    index = mid;       // 记录当前符合
+    L = mid + 1;       // 向右半区继续，寻找更右的符合
+  } else {
+    R = mid - 1;       // 收缩到左半区
+  }
+}
+return index;
+```
+
+* **循环条件 `L ≤ R`**：保证单元素也能比较；
+* **`arr[mid] ≤ value`**
+
+  * 符合条件时，`mid` 是一个候选最右，下次要找更右，故 `L = mid + 1`；
+* **否则**
+
+  * `arr[mid] > value` 时，没有任何 `i ≥ mid` 能够符合，故收缩 `R = mid - 1`；
+* **最终返回**
+
+  * `index` 保存了**最后一轮**符合的位置，若从未更新，则为 `-1`。
+
+---
+
+## 4. 设计/逻辑/代码技巧
+
+1. **记录并推进**
+   一旦符合即 `index = mid`，但不立即返回，要继续向**右**查找更右侧的符合项。
+2. **安全中点**
+   用 `mid = L + ((R - L) >> 1)` 防止大数相加溢出；
+3. **边界收缩**
+
+   * 符合时收 `L = mid + 1`，排除当前及左侧范围；
+   * 失配时收 `R = mid - 1`。
+4. **简洁返回**
+   只需一个 `index` 变量，无需额外后处理。
+
+---
+
+## 5. 完整代码 & 详尽注释
+
+```java
+package class01;
+
+import java.util.Arrays;
+
+public class Code05_BSNearRight {
+
+    /**
+     * 在升序数组 arr 中，查找最后一个满足 arr[i] <= value 的位置
+     * @param arr   已排序数组（升序）
+     * @param value 目标值
+     * @return 最右下标 i（0-based），若不存在返回 -1
+     */
+    public static int nearestIndex(int[] arr, int value) {
+        int L = 0;                   // 初始左界
+        int R = arr.length - 1;      // 初始右界
+        int index = -1;              // 记录最右符合位置，未找到时为 -1
+        while (L <= R) {             // 区间非空
+            int mid = L + ((R - L) >> 1); // 安全中点
+            if (arr[mid] <= value) {
+                // 当前 mid 符合，先记录
+                index = mid;
+                // 继续搜索右侧，寻找更右符合
+                L = mid + 1;
+            } else {
+                // arr[mid] > value，则右侧全不符合
+                R = mid - 1;
+            }
+        }
+        // 返回记录的最右符合位置
+        return index;
+    }
+
+    // 暴力对照：从右向左扫描
+    public static int test(int[] arr, int value) {
+        for (int i = arr.length - 1; i >= 0; i--) {
+            if (arr[i] <= value) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // 随机数组生成
+    public static int[] generateRandomArray(int maxSize, int maxValue) {
+        int len = (int)((maxSize + 1) * Math.random());
+        int[] arr = new int[len];
+        for (int i = 0; i < len; i++) {
+            arr[i] = (int)((maxValue + 1) * Math.random())
+                   - (int)(maxValue * Math.random());
+        }
+        return arr;
+    }
+
+    public static void printArray(int[] arr) {
+        if (arr == null) return;
+        for (int x : arr) System.out.print(x + " ");
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        int testTime = 500000, maxSize = 10, maxValue = 100;
+        boolean succeed = true;
+        for (int i = 0; i < testTime; i++) {
+            int[] arr = generateRandomArray(maxSize, maxValue);
+            Arrays.sort(arr);
+            int value = (int)((maxValue + 1) * Math.random())
+                      - (int)(maxValue * Math.random());
+            if (test(arr, value) != nearestIndex(arr, value)) {
+                printArray(arr);
+                System.out.println("value = " + value);
+                System.out.println("expected = " + test(arr, value));
+                System.out.println("actual   = " + nearestIndex(arr, value));
+                succeed = false;
+                break;
+            }
+        }
+        System.out.println(succeed ? "Nice!" : "Fucking fucked!");
+    }
+}
+```
+
+---
+
+## 6. 详细示例演示
+
+假设 `arr = [1,2,4,4,5,7]`，`value = 4`：
+
+|  轮次 |  L  |  R  | mid = L+((R-L)>>1) | arr\[mid] |      比较     | index |    新 L,R   |
+| :-: | :-: | :-: | :----------------: | :-------: | :---------: | :---: | :--------: |
+|  1  |  0  |  5  |          2         |     4     | 4 ≤ 4 → 记录2 |   2   |   L=3,R=5  |
+|  2  |  3  |  5  |   3+((5-3)>>1)=4   |     5     | 5 > 4 → R=3 |   2   |   L=3,R=3  |
+|  3  |  3  |  3  |          3         |     4     | 4 ≤ 4 → 记录3 |   3   | L=4,R=3 退出 |
+
+最终返回 **`3`**，即最后一个 `≤4` 的最右位置。
+
+---
+
+## 7. 可处理的经典题目
+
+* **LeetCode 34. Find First and Last Position of Element in Sorted Array**（右边界变体）；
+* **lower\_bound / upper\_bound**：C++ STL 中的 `upper_bound` 就是“第一个大于”；而这里是“最后一个小于等于”；
+* **区间统计**：统计 `≤ k` 的个数为 `idx+1`；
+* **搜索旋转数组的边界定位**：同样用边界型二分技巧。
+
+---
+
+## 8. 知识点提取与记忆法
+
+1. **三变量**：`L=0, R=N-1, index=-1`；
+2. **循环条件**：`while (L <= R)`；
+3. **中点**：`mid = L + ((R-L)>>1)`；
+4. **分支逻辑**：
+
+   * **符合** (`arr[mid] ≤ value`) → `index=mid; L=mid+1;`
+   * **不符** → `R=mid-1;`
+5. **返回 `index`**：未更新为 `-1`。
+
+**口诀**：
+
+> **“合时记 mid，往右再搜；不合收右，不停折叠。”**
+
+---
+
+## 9. 严格按照原始代码
+
+以上所有分析、示例与记忆要点，均 **严格对应** 你提供的 `class01.Code05_BSNearRight` 原始实现，未做任何改动或简化。希望这份极致详尽的解析能帮助你彻底掌握这一二分查找边界变体！
